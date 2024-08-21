@@ -46,4 +46,4 @@ signs:
 # release:
 #   draft: true
 changelog:
-  skip: true
+  use: github-native

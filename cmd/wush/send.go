@@ -8,23 +8,23 @@ import (
 	"log/slog"
 	"net/netip"
 	"os"
-	"os/signal"
 	"time"
 
 	"github.com/charmbracelet/huh"
-	"github.com/coder/coder/v2/pty"
-	"github.com/coder/serpent"
-	"github.com/coder/wush/cliui"
-	"github.com/coder/wush/overlay"
-	"github.com/coder/wush/tsserver"
 	"github.com/mattn/go-isatty"
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/sys/unix"
 	"golang.org/x/term"
 	"golang.org/x/xerrors"
 	"tailscale.com/client/tailscale"
 	"tailscale.com/net/netns"
 	"tailscale.com/tailcfg"
+
+	"github.com/coder/coder/v2/pty"
+	"github.com/coder/serpent"
+	"github.com/coder/wush/cliui"
+	"github.com/coder/wush/overlay"
+	"github.com/coder/wush/tsserver"
+	xssh "github.com/coder/wush/xssh"
 )
 
 func sendCmd() *serpent.Command {
@@ -156,7 +156,7 @@ func sendCmd() *serpent.Command {
 					_ = pty.RestoreTerminal(stdoutFile.Fd(), outState)
 				}()
 
-				windowChange := listenWindowSize(ctx)
+				windowChange := xssh.ListenWindowSize(ctx)
 				go func() {
 					for {
 						select {
@@ -205,16 +205,6 @@ func sendCmd() *serpent.Command {
 			},
 		},
 	}
-}
-
-func listenWindowSize(ctx context.Context) <-chan os.Signal {
-	windowSize := make(chan os.Signal, 1)
-	signal.Notify(windowSize, unix.SIGWINCH)
-	go func() {
-		<-ctx.Done()
-		signal.Stop(windowSize)
-	}()
-	return windowSize
 }
 
 func waitUntilHasPeerHasIP(ctx context.Context, lc *tailscale.LocalClient) (netip.Addr, error) {
