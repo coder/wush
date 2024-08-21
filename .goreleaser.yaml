@@ -24,7 +24,7 @@ builds:
         goarch: "386"
       - goos: windows
         goarch: "arm"
-    binary: "{{ .ProjectName }}_v{{ .Version }}"
+    binary: "{{ .ProjectName }}"
 nfpms:
   - vendor: Coder Technologies Inc.
     homepage: https://coder.com/
@@ -33,6 +33,9 @@ nfpms:
       Wush installer package.
       Wush creates secure Wireguard tunnels between two devices.
     license: CC0
+    contents:
+      - src: LICENSE
+        dst: "/usr/share/doc/{{ .ProjectName }}/copyright"
     formats:
       - apk
       - deb
