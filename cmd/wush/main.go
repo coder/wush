@@ -8,9 +8,10 @@ import (
 )
 
 func main() {
-	cmd := sendCmd()
+	cmd := sshCmd()
 	cmd.Children = []*serpent.Command{
 		receiveCmd(),
+		rsyncCmd(),
 	}
 	err := cmd.Invoke().WithOS().Run()
 	if err != nil {

@@ -259,7 +259,7 @@ func (s *Send) handleNextMessage(msg []byte) (resRaw []byte, _ error) {
 		s.waitIPOnce.Do(func() {
 			close(s.waitIP)
 		})
-		fmt.Println(cliui.Timestamp(time.Now()), "Received IP from peer:", s._ip.String())
+		// fmt.Println("Received IP from peer:", s._ip.String())
 	case messageTypeNodeUpdate:
 		s.in <- &ovMsg.Node
 	}

@@ -1,7 +1,7 @@
 //go:build windows
 // +build windows
 
-package ssh
+package xssh
 
 import (
 	"context"

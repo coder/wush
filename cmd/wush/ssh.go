@@ -7,19 +7,13 @@ import (
 	"io"
 	"log/slog"
 	"net/netip"
-	"os"
 	"time"
 
 	"github.com/charmbracelet/huh"
-	"github.com/mattn/go-isatty"
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/term"
-	"golang.org/x/xerrors"
 	"tailscale.com/client/tailscale"
 	"tailscale.com/net/netns"
 	"tailscale.com/tailcfg"
 
-	"github.com/coder/coder/v2/pty"
 	"github.com/coder/serpent"
 	"github.com/coder/wush/cliui"
 	"github.com/coder/wush/overlay"
@@ -27,16 +21,19 @@ import (
 	xssh "github.com/coder/wush/xssh"
 )
 
-func sendCmd() *serpent.Command {
+func sshCmd() *serpent.Command {
 	var (
 		authID             string
 		waitP2P            bool
 		overlayTransport   string
 		stunAddrOverride   string
 		stunAddrOverrideIP netip.Addr
+		sshStdio           bool
 	)
 	return &serpent.Command{
-		Use: "send",
+		Use: "wush",
+		Long: "Opens an SSH connection to a " + cliui.Code("wush") + " peer. " +
+			"Use " + cliui.Code("wush receive") + " on the computer you would like to connect to.",
 		Handler: func(inv *serpent.Invocation) error {
 			ctx := inv.Context()
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -71,19 +68,21 @@ func sendCmd() *serpent.Command {
 				return fmt.Errorf("parse auth key: %w", err)
 			}
 
-			fmt.Println("Auth information:")
-			stunStr := send.Auth.ReceiverStunAddr.String()
-			if !send.Auth.ReceiverStunAddr.IsValid() {
-				stunStr = "Disabled"
+			if !sshStdio {
+				fmt.Println("Auth information:")
+				stunStr := send.Auth.ReceiverStunAddr.String()
+				if !send.Auth.ReceiverStunAddr.IsValid() {
+					stunStr = "Disabled"
+				}
+				fmt.Println("\t> Server overlay STUN address:", cliui.Code(stunStr))
+				derpStr := "Disabled"
+				if send.Auth.ReceiverDERPRegionID > 0 {
+					derpStr = dm.Regions[int(send.Auth.ReceiverDERPRegionID)].RegionName
+				}
+				fmt.Println("\t> Server overlay DERP home:   ", cliui.Code(derpStr))
+				fmt.Println("\t> Server overlay public key:  ", cliui.Code(send.Auth.ReceiverPublicKey.ShortString()))
+				fmt.Println("\t> Server overlay auth key:    ", cliui.Code(send.Auth.OverlayPrivateKey.Public().ShortString()))
 			}
-			fmt.Println("\t> Server overlay STUN address:", cliui.Code(stunStr))
-			derpStr := "Disabled"
-			if send.Auth.ReceiverDERPRegionID > 0 {
-				derpStr = dm.Regions[int(send.Auth.ReceiverDERPRegionID)].RegionName
-			}
-			fmt.Println("\t> Server overlay DERP home:   ", cliui.Code(derpStr))
-			fmt.Println("\t> Server overlay public key:  ", cliui.Code(send.Auth.ReceiverPublicKey.ShortString()))
-			fmt.Println("\t> Server overlay auth key:    ", cliui.Code(send.Auth.OverlayPrivateKey.Public().ShortString()))
 
 			s, err := tsserver.NewServer(ctx, logger, send)
 			if err != nil {
@@ -112,9 +111,9 @@ func sendCmd() *serpent.Command {
 			ts.Logf = func(string, ...any) {}
 			ts.UserLogf = func(string, ...any) {}
 
-			fmt.Println("Bringing Wireguard up..")
+			// fmt.Println("Bringing Wireguard up..")
 			ts.Up(ctx)
-			fmt.Println("Wireguard is ready!")
+			// fmt.Println("Wireguard is ready!")
 
 			lc, err := ts.LocalClient()
 			if err != nil {
@@ -133,87 +132,13 @@ func sendCmd() *serpent.Command {
 				}
 			}
 
-			conn, err := ts.Dial(ctx, "tcp", ip.String()+":3")
-			if err != nil {
-				return err
-			}
-
-			sshConn, channels, requests, err := ssh.NewClientConn(conn, "localhost:22", &ssh.ClientConfig{
-				HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-			})
-			if err != nil {
-				return err
-			}
-
-			sshClient := ssh.NewClient(sshConn, channels, requests)
-			sshSession, err := sshClient.NewSession()
-			if err != nil {
-				return err
-			}
-
-			stdinFile, validIn := inv.Stdin.(*os.File)
-			stdoutFile, validOut := inv.Stdout.(*os.File)
-			if validIn && validOut && isatty.IsTerminal(stdinFile.Fd()) && isatty.IsTerminal(stdoutFile.Fd()) {
-				inState, err := pty.MakeInputRaw(stdinFile.Fd())
-				if err != nil {
-					return err
-				}
-				defer func() {
-					_ = pty.RestoreTerminal(stdinFile.Fd(), inState)
-				}()
-				outState, err := pty.MakeOutputRaw(stdoutFile.Fd())
-				if err != nil {
-					return err
-				}
-				defer func() {
-					_ = pty.RestoreTerminal(stdoutFile.Fd(), outState)
-				}()
-
-				windowChange := xssh.ListenWindowSize(ctx)
-				go func() {
-					for {
-						select {
-						case <-ctx.Done():
-							return
-						case <-windowChange:
-						}
-						width, height, err := term.GetSize(int(stdoutFile.Fd()))
-						if err != nil {
-							continue
-						}
-						_ = sshSession.WindowChange(height, width)
-					}
-				}()
-			}
-
-			err = sshSession.RequestPty("xterm-256color", 128, 128, ssh.TerminalModes{})
-			if err != nil {
-				return xerrors.Errorf("request pty: %w", err)
-			}
-
-			sshSession.Stdin = inv.Stdin
-			sshSession.Stdout = inv.Stdout
-			sshSession.Stderr = inv.Stderr
-
-			err = sshSession.Shell()
-			if err != nil {
-				return xerrors.Errorf("start shell: %w", err)
-			}
-
-			if validOut {
-				// Set initial window size.
-				width, height, err := term.GetSize(int(stdoutFile.Fd()))
-				if err == nil {
-					_ = sshSession.WindowChange(height, width)
-				}
-			}
-
-			return sshSession.Wait()
+			return xssh.TailnetSSH(ctx, inv, ts, ip.String()+":3", sshStdio)
 		},
 		Options: []serpent.Option{
 			{
 				Flag:        "auth-id",
-				Description: "The auth id returned by `wush receive`. If not provided, it will be asked for on startup.",
+				Env:         "WUSH_AUTH_ID",
+				Description: "The auth id returned by " + cliui.Code("wush receive") + ". If not provided, it will be asked for on startup.",
 				Default:     "",
 				Value:       serpent.StringOf(&authID),
 			},
@@ -227,6 +152,12 @@ func sendCmd() *serpent.Command {
 				Flag:    "stun-ip-override",
 				Default: "",
 				Value:   serpent.StringOf(&stunAddrOverride),
+			},
+			{
+				Flag:        "stdio",
+				Description: "Run SSH over stdin/stdout. This allows wush to be used as a transport for other programs, like rsync or regular ssh.",
+				Default:     "false",
+				Value:       serpent.BoolOf(&sshStdio),
 			},
 		},
 	}
@@ -248,11 +179,11 @@ func waitUntilHasPeerHasIP(ctx context.Context, lc *tailscale.LocalClient) (neti
 
 		peers := stat.Peers()
 		if len(peers) == 0 {
-			fmt.Println("No peer yet")
+			// fmt.Println("No peer yet")
 			continue
 		}
 
-		fmt.Println("Received peer")
+		// fmt.Println("Received peer")
 
 		peer, ok := stat.Peer[peers[0]]
 		if !ok {
@@ -265,7 +196,7 @@ func waitUntilHasPeerHasIP(ctx context.Context, lc *tailscale.LocalClient) (neti
 			continue
 		}
 
-		fmt.Println("Peer active with relay", cliui.Code(peer.Relay))
+		// fmt.Println("Peer active with relay", cliui.Code(peer.Relay))
 
 		if len(peer.TailscaleIPs) == 0 {
 			fmt.Println("peer has no ips (developer error)")
@@ -302,7 +233,7 @@ func waitUntilHasP2P(ctx context.Context, lc *tailscale.LocalClient) error {
 			continue
 		}
 
-		fmt.Println("Peer active with relay", cliui.Code(peer.Relay))
+		// fmt.Println("Peer active with relay", cliui.Code(peer.Relay))
 
 		if len(peer.TailscaleIPs) == 0 {
 			fmt.Println("peer has no ips (developer error)")
@@ -322,7 +253,7 @@ func waitUntilHasP2P(ctx context.Context, lc *tailscale.LocalClient) error {
 			continue
 		}
 
-		fmt.Println("Peer active over p2p", cliui.Code(pong.Endpoint))
+		// fmt.Println("Peer active over p2p", cliui.Code(pong.Endpoint))
 		return nil
 	}
 }
