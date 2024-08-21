@@ -8,10 +8,9 @@ import (
 )
 
 func main() {
-	cmd := receiveCmd()
+	cmd := sendCmd()
 	cmd.Children = []*serpent.Command{
-		serverCmd(),
-		sendCmd(),
+		receiveCmd(),
 	}
 	err := cmd.Invoke().WithOS().Run()
 	if err != nil {
