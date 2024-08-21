@@ -29,8 +29,9 @@ func NewSendOverlay(logger *slog.Logger, dm *tailcfg.DERPMap) *Send {
 }
 
 type Send struct {
-	Logger  *slog.Logger
-	derpMap *tailcfg.DERPMap
+	Logger         *slog.Logger
+	STUNIPOverride netip.Addr
+	derpMap        *tailcfg.DERPMap
 
 	// _ip is the ip we get from the receiver, which is our ip on the tailnet.
 	_ip        netip.Addr
@@ -74,13 +75,18 @@ func (s *Send) ListenOverlaySTUN(ctx context.Context) error {
 		panic("marshal node: " + err.Error())
 	}
 
-	addrOverride := netip.AddrPortFrom(netip.AddrFrom4([4]byte{127, 0, 0, 1}), s.Auth.ReceiverStunAddr.Port())
+	receiverAddr := s.Auth.ReceiverStunAddr
+	if s.STUNIPOverride.IsValid() {
+		receiverAddr = netip.AddrPortFrom(s.STUNIPOverride, s.Auth.ReceiverStunAddr.Port())
+	}
+
 	sealed := s.Auth.OverlayPrivateKey.SealTo(s.Auth.ReceiverPublicKey, raw)
-	// _, err = conn.WriteToUDPAddrPort(sealed, s.Auth.ReceiverStunAddr)
-	_, err = conn.WriteToUDPAddrPort(sealed, addrOverride)
+	_, err = conn.WriteToUDPAddrPort(sealed, receiverAddr)
 	if err != nil {
 		return fmt.Errorf("send overlay hello over STUN: %w", err)
 	}
+
+	keepAlive := time.NewTicker(30 * time.Second)
 
 	go func() {
 		for {
@@ -98,9 +104,25 @@ func (s *Send) ListenOverlaySTUN(ctx context.Context) error {
 				}
 
 				sealed := s.Auth.OverlayPrivateKey.SealTo(s.Auth.ReceiverPublicKey, raw)
-				_, err = conn.WriteToUDPAddrPort(sealed, addrOverride)
+				_, err = conn.WriteToUDPAddrPort(sealed, receiverAddr)
 				if err != nil {
 					fmt.Printf("send response over STUN: %s\n", err)
+					return
+				}
+
+			case <-keepAlive.C:
+				msg := overlayMessage{
+					Typ: messageTypePing,
+				}
+				raw, err := json.Marshal(msg)
+				if err != nil {
+					panic("marshal node: " + err.Error())
+				}
+
+				sealed := s.Auth.OverlayPrivateKey.SealTo(s.Auth.ReceiverPublicKey, raw)
+				_, err = conn.WriteToUDPAddrPort(sealed, receiverAddr)
+				if err != nil {
+					fmt.Printf("send ping message over STUN: %s\n", err)
 					return
 				}
 			}

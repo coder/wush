@@ -29,21 +29,26 @@ import (
 
 func sendCmd() *serpent.Command {
 	var (
-		waitP2P     bool
-		overlayType string
+		authID             string
+		waitP2P            bool
+		overlayTransport   string
+		stunAddrOverride   string
+		stunAddrOverrideIP netip.Addr
 	)
 	return &serpent.Command{
 		Use: "send",
 		Handler: func(inv *serpent.Invocation) error {
 			ctx := inv.Context()
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-			var authID string
-			err := huh.NewInput().
-				Title("Enter your Auth ID:").
-				Value(&authID).
-				Run()
-			if err != nil {
-				return fmt.Errorf("get auth id: %w", err)
+
+			if authID == "" {
+				err := huh.NewInput().
+					Title("Enter your Auth ID:").
+					Value(&authID).
+					Run()
+				if err != nil {
+					return fmt.Errorf("get auth id: %w", err)
+				}
 			}
 
 			dm, err := tsserver.DERPMapTailscale(ctx)
@@ -51,7 +56,15 @@ func sendCmd() *serpent.Command {
 				return err
 			}
 
+			if stunAddrOverride != "" {
+				stunAddrOverrideIP, err = netip.ParseAddr(stunAddrOverride)
+				if err != nil {
+					return fmt.Errorf("parse stun addr override: %w", err)
+				}
+			}
+
 			send := overlay.NewSendOverlay(logger, dm)
+			send.STUNIPOverride = stunAddrOverrideIP
 
 			err = send.Auth.Parse(authID)
 			if err != nil {
@@ -77,7 +90,7 @@ func sendCmd() *serpent.Command {
 				return err
 			}
 
-			switch overlayType {
+			switch overlayTransport {
 			case "derp":
 				if send.Auth.ReceiverDERPRegionID == 0 {
 					return errors.New("overlay type is \"derp\", but receiver is of type \"stun\"")
@@ -199,9 +212,21 @@ func sendCmd() *serpent.Command {
 		},
 		Options: []serpent.Option{
 			{
-				Flag:    "overlay-type",
-				Default: "derp",
-				Value:   serpent.EnumOf(&overlayType, "derp", "stun"),
+				Flag:        "auth-id",
+				Description: "The auth id returned by `wush receive`. If not provided, it will be asked for on startup.",
+				Default:     "",
+				Value:       serpent.StringOf(&authID),
+			},
+			{
+				Flag:        "overlay-transport",
+				Description: "The transport to use on the overlay. The overlay is used to exchange Wireguard nodes between peers. In DERP mode, nodes are exchanged over public Tailscale DERPs, while STUN mode sends nodes directly over UDP.",
+				Default:     "derp",
+				Value:       serpent.EnumOf(&overlayTransport, "derp", "stun"),
+			},
+			{
+				Flag:    "stun-ip-override",
+				Default: "",
+				Value:   serpent.StringOf(&stunAddrOverride),
 			},
 		},
 	}
