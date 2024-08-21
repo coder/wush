@@ -1,5 +1,6 @@
 builds:
-  - env:
+  - dir: "./cmd/wush"
+    env:
       - CGO_ENABLED=0
     mod_timestamp: "{{ .CommitTimestamp }}"
     flags:
