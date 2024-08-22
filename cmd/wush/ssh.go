@@ -40,7 +40,7 @@ func sshCmd() *serpent.Command {
 				if sshStdio {
 					return
 				}
-				fmt.Fprintf(inv.Stderr, str, args...)
+				fmt.Fprintf(inv.Stderr, str+"\n", args...)
 			}
 			if authID == "" {
 				err := huh.NewInput().
@@ -82,9 +82,9 @@ func sshCmd() *serpent.Command {
 			if send.Auth.ReceiverDERPRegionID > 0 {
 				derpStr = dm.Regions[int(send.Auth.ReceiverDERPRegionID)].RegionName
 			}
-			logF("\t> Server overlay DERP home:   %s", cliui.Code(derpStr))
-			logF("\t> Server overlay public key:  %s", cliui.Code(send.Auth.ReceiverPublicKey.ShortString()))
-			logF("\t> Server overlay auth key:    %s", cliui.Code(send.Auth.OverlayPrivateKey.Public().ShortString()))
+			logF("\t> Server overlay DERP home:    %s", cliui.Code(derpStr))
+			logF("\t> Server overlay public key:   %s", cliui.Code(send.Auth.ReceiverPublicKey.ShortString()))
+			logF("\t> Server overlay auth key:     %s", cliui.Code(send.Auth.OverlayPrivateKey.Public().ShortString()))
 
 			s, err := tsserver.NewServer(ctx, logger, send)
 			if err != nil {
