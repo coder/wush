@@ -54,37 +54,50 @@ func (ca *ClientAuth) AuthKey() string {
 }
 
 func (ca *ClientAuth) Parse(authKey string) error {
-	dec := cursor{
-		b: base58.Decode(authKey),
-	}
-
 	if len(authKey) == 0 {
 		return errors.New("auth key should not be empty")
 	}
 
-	ipLen := int(dec.next(1)[0])
+	decr := bytes.NewReader(base58.Decode(authKey))
+
+	ipLenB, err := decr.ReadByte()
+	if err != nil {
+		return errors.New("read STUN ip len; invalid authkey")
+	}
+
+	ipLen := int(ipLenB)
 	if ipLen > 0 {
-		stunIPBytes := dec.next(ipLen + 2)
-		err := ca.ReceiverStunAddr.UnmarshalBinary(stunIPBytes)
+		stunIPBytes := make([]byte, ipLen+2)
+		n, err := decr.Read(stunIPBytes)
+		if n != len(stunIPBytes) || err != nil {
+			return errors.New("read STUN ip; invalid authkey")
+		}
+
+		err = ca.ReceiverStunAddr.UnmarshalBinary(stunIPBytes)
 		if err != nil {
 			return fmt.Errorf("unmarshal receiver stun address: %w", err)
 		}
 	}
 
-	ca.ReceiverDERPRegionID = binary.BigEndian.Uint16(dec.next(2))
+	derpRegionBytes := make([]byte, 2)
+	n, err := decr.Read(derpRegionBytes)
+	if n != len(derpRegionBytes) || err != nil {
+		return errors.New("read derp region; invalid authkey")
+	}
+	ca.ReceiverDERPRegionID = binary.BigEndian.Uint16(derpRegionBytes)
 
-	ca.ReceiverPublicKey = key.NodePublicFromRaw32(mem.B(dec.next(32)))
-	ca.OverlayPrivateKey = key.NodePrivateFromRaw32(mem.B(dec.next(32)))
+	pubKeyBytes := make([]byte, 32)
+	n, err = decr.Read(pubKeyBytes)
+	if n != len(pubKeyBytes) || err != nil {
+		return errors.New("read receiver pubkey; invalid authkey")
+	}
+	ca.ReceiverPublicKey = key.NodePublicFromRaw32(mem.B(pubKeyBytes))
+
+	privKeyBytes := make([]byte, 32)
+	n, err = decr.Read(privKeyBytes)
+	if n != len(privKeyBytes) || err != nil {
+		return errors.New("read overlay privkey; invalid authkey")
+	}
+	ca.OverlayPrivateKey = key.NodePrivateFromRaw32(mem.B(privKeyBytes))
 	return nil
-}
-
-type cursor struct {
-	at int
-	b  []byte
-}
-
-func (c *cursor) next(i int) []byte {
-	ret := c.b[c.at : c.at+i]
-	c.at += i
-	return ret
 }

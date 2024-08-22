@@ -25,8 +25,9 @@ import (
 func receiveCmd() *serpent.Command {
 	var overlayType string
 	return &serpent.Command{
-		Use:  "receive",
-		Long: "Runs the wush server. Allows other wush CLIs to connect to this computer.",
+		Use:     "receive",
+		Aliases: []string{"host"},
+		Long:    "Runs the wush server. Allows other wush CLIs to connect to this computer.",
 		Handler: func(inv *serpent.Invocation) error {
 			ctx := inv.Context()
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
