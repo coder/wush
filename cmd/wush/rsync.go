@@ -26,9 +26,11 @@ func rsyncCmd() *serpent.Command {
 		sshStdio           bool
 	)
 	return &serpent.Command{
-		Use: "rsync",
+		Use: "rsync [flags] -- [rsync args]",
 		Long: "Runs rsync to transfer files to a " + cliui.Code("wush") + " peer. " +
-			"Use " + cliui.Code("wush receive") + " on the computer you would like to connect to.",
+			"Use " + cliui.Code("wush receive") + " on the computer you would like to connect to." +
+			"\n\n" +
+			"Example: " + "wush rsync -- --progress --stats -avz --human-readable /local/path :/remote/path",
 		Handler: func(inv *serpent.Invocation) error {
 			ctx := inv.Context()
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -79,11 +81,11 @@ func rsyncCmd() *serpent.Command {
 
 			progPath := os.Args[0]
 			args := []string{
-				"-c",
-				"rsync --progress --stats -avz --human-readable " + fmt.Sprintf("-e=\"%s --auth-id %s --stdio --\" ", progPath, send.Auth.AuthKey()) + strings.Join(inv.Args, " "),
+				"-e", fmt.Sprintf("%s --auth-id %s --stdio --", progPath, send.Auth.AuthKey()),
 			}
-			fmt.Println("Running: rsync", args)
-			cmd := exec.CommandContext(ctx, "sh", args...)
+			args = append(args, inv.Args...)
+			fmt.Println("Running: rsync", strings.Join(args, " "))
+			cmd := exec.CommandContext(ctx, "rsync", args...)
 			cmd.Stdin = inv.Stdin
 			cmd.Stdout = inv.Stdout
 			cmd.Stderr = inv.Stderr
