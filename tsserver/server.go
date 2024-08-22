@@ -132,13 +132,11 @@ type memListen struct {
 
 // Accept waits for and returns the next connection to the listener.
 func (m *memListen) Accept() (net.Conn, error) {
-	select {
-	case c := <-m.listen:
-		if c == nil {
-			return nil, errors.New("closed")
-		}
-		return c, nil
+	c, ok := <-m.listen
+	if !ok {
+		return nil, errors.New("closed")
 	}
+	return c, nil
 }
 
 // Close closes the listener.
@@ -258,7 +256,10 @@ func (s *server) NoiseUpgradeHandler(w http.ResponseWriter, r *http.Request) {
 		// (such as our in-memory connection to the tsserver), the client will
 		// just hang on https://github.com/coadler/tailscale/blob/main/internal/noiseconn/conn.go#L59
 		// and https://github.com/coadler/tailscale/blob/main/control/controlhttp/server.go#L107.
-		// Disabling the early write seems to fix it.
+		// Disabling the early write seems to fix it. Using a buffered network
+		// connection (such as *fasthttputil.InmemoryListener), works somewhat
+		// but still causes random race conditions that causes the connection to
+		// stall.
 		nil,
 	)
 	if err != nil {
