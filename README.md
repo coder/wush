@@ -4,11 +4,12 @@
 
 `wush` is a command line tool that lets you easily transfer
 files and open shells over a peer-to-peer wireguard connection. It's similar to [magic-wormhole](https://github.com/magic-wormhole/magic-wormhole) but doesn't require you to
-set up a relay server.
+set up or trust a relay server.
 
 ## Basic Usage
 
 Install:
-```
+
+```bash
 go install github.com/coder/wush/cmd/wush@latest
 ```

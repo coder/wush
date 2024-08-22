@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pion/stun/v3"
@@ -59,7 +60,7 @@ type Receive struct {
 	// 100.64.x.x.
 	nextPeerIP uint16
 
-	lastNode *tailcfg.Node
+	lastNode atomic.Pointer[tailcfg.Node]
 	in       chan *tailcfg.Node
 	out      chan *tailcfg.Node
 }
@@ -155,7 +156,7 @@ func (r *Receive) ListenOverlaySTUN(ctx context.Context) (<-chan struct{}, error
 			case <-ctx.Done():
 				return
 			case node := <-r.out:
-				r.lastNode = node
+				r.lastNode.Store(node)
 				raw, err := json.Marshal(overlayMessage{
 					Typ:  messageTypeNodeUpdate,
 					Node: *node,
@@ -271,7 +272,7 @@ func (r *Receive) ListenOverlayDERP(ctx context.Context) error {
 			case <-ctx.Done():
 				return
 			case node := <-r.out:
-				r.lastNode = node
+				r.lastNode.Store(node)
 				raw, err := json.Marshal(overlayMessage{
 					Typ:  messageTypeNodeUpdate,
 					Node: *node,
@@ -346,7 +347,9 @@ func (r *Receive) handleNextMessage(msg []byte, system string) (resRaw []byte, n
 		fmt.Println(cliui.Timestamp(time.Now()), "Received updated node from", cliui.Code(ovMsg.Node.Key.String()))
 		r.in <- &ovMsg.Node
 		res.Typ = messageTypeNodeUpdate
-		res.Node = *r.lastNode
+		if lastNode := r.lastNode.Load(); lastNode != nil {
+			res.Node = *lastNode
+		}
 	}
 
 	if res.Typ == 0 {
