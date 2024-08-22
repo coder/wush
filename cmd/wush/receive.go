@@ -71,8 +71,6 @@ func receiveCmd() *serpent.Command {
 			if err != nil {
 				return err
 			}
-			ts.Logf = func(string, ...any) {}
-			ts.UserLogf = func(string, ...any) {}
 
 			ts.Up(ctx)
 			fs := afero.NewOsFs()
@@ -111,7 +109,13 @@ func newTSNet(direction string) (*tsnet.Server, error) {
 	srv.AuthKey = direction
 	srv.ControlURL = "http://localhost:8080"
 	srv.Logf = func(format string, args ...any) {}
+	// srv.Logf = func(format string, args ...any) {
+	// 	fmt.Printf(format+"\n", args...)
+	// }
 	srv.UserLogf = func(format string, args ...any) {}
+	// srv.UserLogf = func(format string, args ...any) {
+	// 	fmt.Printf(format+"\n", args...)
+	// }
 
 	srv.Store, err = store.New(func(format string, args ...any) {}, "mem:wush")
 	if err != nil {

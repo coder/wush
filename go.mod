@@ -30,7 +30,6 @@ require (
 	golang.org/x/sys v0.24.0
 	golang.org/x/term v0.22.0
 	golang.org/x/xerrors v0.0.0-20240716161551-93cc26a95ae9
-	gvisor.dev/gvisor v0.0.0-20240722211153-64c016c92987
 	tailscale.com v1.70.0
 )
 
@@ -216,6 +215,7 @@ require (
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/DataDog/dd-trace-go.v1 v1.64.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gvisor.dev/gvisor v0.0.0-20240722211153-64c016c92987 // indirect
 	nhooyr.io/websocket v1.8.10 // indirect
 	storj.io/drpc v0.0.33 // indirect
 )

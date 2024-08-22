@@ -123,7 +123,7 @@ func (s *server) ListenAndServe(_ context.Context) error {
 		}
 	}()
 
-	return http.Serve(s.ll, r)
+	return http.Serve(s.ml, r)
 }
 
 type memListen struct {
@@ -153,10 +153,10 @@ func (m *memListen) Addr() net.Addr {
 	return &net.IPAddr{}
 }
 
-func (m *memListen) Dial() net.Conn {
+func (m *memListen) Dial() (net.Conn, error) {
 	in, out := net.Pipe()
 	m.listen <- in
-	return out
+	return out, nil
 }
 
 type memDialer struct {
@@ -170,7 +170,7 @@ func (m memDialer) Dial(network string, address string) (net.Conn, error) {
 		return nil, errors.New("tls not supported")
 	}
 
-	return m.ll.Dial()
+	return m.ml.Dial()
 }
 
 func (m memDialer) DialContext(ctx context.Context, network string, address string) (net.Conn, error) {
@@ -183,7 +183,7 @@ func (m memDialer) DialContext(ctx context.Context, network string, address stri
 		return d.DialContext(ctx, network, address)
 	}
 
-	return m.ll.Dial()
+	return m.ml.Dial()
 }
 
 func (s *server) Dialer() netns.Dialer {
@@ -253,7 +253,13 @@ func (s *server) NoiseUpgradeHandler(w http.ResponseWriter, r *http.Request) {
 		w,
 		r,
 		s.noisePrivateKey,
-		ns.earlyNoise,
+		// ns.earlyNoise,
+		// TODO: for some reason when using an unbuffered network connection
+		// (such as our in-memory connection to the tsserver), the client will
+		// just hang on https://github.com/coadler/tailscale/blob/main/internal/noiseconn/conn.go#L59
+		// and https://github.com/coadler/tailscale/blob/main/control/controlhttp/server.go#L107.
+		// Disabling the early write seems to fix it.
+		nil,
 	)
 	if err != nil {
 		// http.Error(w, err.Error(), http.StatusInternalServerError)
