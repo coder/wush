@@ -25,7 +25,6 @@ func sshCmd() *serpent.Command {
 	var (
 		authID             string
 		waitP2P            bool
-		overlayTransport   string
 		stunAddrOverride   string
 		stunAddrOverrideIP netip.Addr
 		sshStdio           bool
@@ -37,6 +36,12 @@ func sshCmd() *serpent.Command {
 		Handler: func(inv *serpent.Invocation) error {
 			ctx := inv.Context()
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			logF := func(str string, args ...any) {
+				if sshStdio {
+					return
+				}
+				fmt.Fprintf(inv.Stderr, str, args...)
+			}
 			if authID == "" {
 				err := huh.NewInput().
 					Title("Enter the receiver's Auth ID:").
@@ -67,38 +72,31 @@ func sshCmd() *serpent.Command {
 				return fmt.Errorf("parse auth key: %w", err)
 			}
 
-			if !sshStdio {
-				fmt.Println("Auth information:")
-				stunStr := send.Auth.ReceiverStunAddr.String()
-				if !send.Auth.ReceiverStunAddr.IsValid() {
-					stunStr = "Disabled"
-				}
-				fmt.Println("\t> Server overlay STUN address:", cliui.Code(stunStr))
-				derpStr := "Disabled"
-				if send.Auth.ReceiverDERPRegionID > 0 {
-					derpStr = dm.Regions[int(send.Auth.ReceiverDERPRegionID)].RegionName
-				}
-				fmt.Println("\t> Server overlay DERP home:   ", cliui.Code(derpStr))
-				fmt.Println("\t> Server overlay public key:  ", cliui.Code(send.Auth.ReceiverPublicKey.ShortString()))
-				fmt.Println("\t> Server overlay auth key:    ", cliui.Code(send.Auth.OverlayPrivateKey.Public().ShortString()))
+			logF("Auth information:")
+			stunStr := send.Auth.ReceiverStunAddr.String()
+			if !send.Auth.ReceiverStunAddr.IsValid() {
+				stunStr = "Disabled"
 			}
+			logF("\t> Server overlay STUN address: %s", cliui.Code(stunStr))
+			derpStr := "Disabled"
+			if send.Auth.ReceiverDERPRegionID > 0 {
+				derpStr = dm.Regions[int(send.Auth.ReceiverDERPRegionID)].RegionName
+			}
+			logF("\t> Server overlay DERP home:   %s", cliui.Code(derpStr))
+			logF("\t> Server overlay public key:  %s", cliui.Code(send.Auth.ReceiverPublicKey.ShortString()))
+			logF("\t> Server overlay auth key:    %s", cliui.Code(send.Auth.OverlayPrivateKey.Public().ShortString()))
 
 			s, err := tsserver.NewServer(ctx, logger, send)
 			if err != nil {
 				return err
 			}
 
-			switch overlayTransport {
-			case "derp":
-				if send.Auth.ReceiverDERPRegionID == 0 {
-					return errors.New("overlay type is \"derp\", but receiver is of type \"stun\"")
-				}
+			if send.Auth.ReceiverDERPRegionID != 0 {
 				go send.ListenOverlayDERP(ctx)
-			case "stun":
-				if !send.Auth.ReceiverStunAddr.IsValid() {
-					return errors.New("overlay type is \"stun\", but receiver is of type \"derp\"")
-				}
+			} else if send.Auth.ReceiverStunAddr.IsValid() {
 				go send.ListenOverlaySTUN(ctx)
+			} else {
+				return errors.New("auth key provided neither DERP nor STUN")
 			}
 
 			go s.ListenAndServe(ctx)
@@ -110,22 +108,22 @@ func sshCmd() *serpent.Command {
 			ts.Logf = func(string, ...any) {}
 			ts.UserLogf = func(string, ...any) {}
 
-			// fmt.Println("Bringing Wireguard up..")
+			logF("Bringing Wireguard up..")
 			ts.Up(ctx)
-			// fmt.Println("Wireguard is ready!")
+			logF("Wireguard is ready!")
 
 			lc, err := ts.LocalClient()
 			if err != nil {
 				return err
 			}
 
-			ip, err := waitUntilHasPeerHasIP(ctx, lc)
+			ip, err := waitUntilHasPeerHasIP(ctx, logF, lc)
 			if err != nil {
 				return err
 			}
 
 			if waitP2P {
-				err := waitUntilHasP2P(ctx, lc)
+				err := waitUntilHasP2P(ctx, logF, lc)
 				if err != nil {
 					return err
 				}
@@ -142,12 +140,6 @@ func sshCmd() *serpent.Command {
 				Value:       serpent.StringOf(&authID),
 			},
 			{
-				Flag:        "overlay-transport",
-				Description: "The transport to use on the overlay. The overlay is used to exchange Wireguard nodes between peers. In DERP mode, nodes are exchanged over public Tailscale DERPs, while STUN mode sends nodes directly over UDP.",
-				Default:     "derp",
-				Value:       serpent.EnumOf(&overlayTransport, "derp", "stun"),
-			},
-			{
 				Flag:    "stun-ip-override",
 				Default: "",
 				Value:   serpent.StringOf(&stunAddrOverride),
@@ -158,11 +150,17 @@ func sshCmd() *serpent.Command {
 				Default:     "false",
 				Value:       serpent.BoolOf(&sshStdio),
 			},
+			{
+				Flag:        "wait-p2p",
+				Description: "Waits for the connection to be p2p.",
+				Default:     "false",
+				Value:       serpent.BoolOf(&sshStdio),
+			},
 		},
 	}
 }
 
-func waitUntilHasPeerHasIP(ctx context.Context, lc *tailscale.LocalClient) (netip.Addr, error) {
+func waitUntilHasPeerHasIP(ctx context.Context, logF func(str string, args ...any), lc *tailscale.LocalClient) (netip.Addr, error) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -178,27 +176,27 @@ func waitUntilHasPeerHasIP(ctx context.Context, lc *tailscale.LocalClient) (neti
 
 		peers := stat.Peers()
 		if len(peers) == 0 {
-			// fmt.Println("No peer yet")
+			logF("No peer yet")
 			continue
 		}
 
-		// fmt.Println("Received peer")
+		logF("Received peer")
 
 		peer, ok := stat.Peer[peers[0]]
 		if !ok {
-			fmt.Println("have peers but not found in map (developer error)")
+			logF("have peers but not found in map (developer error)")
 			continue
 		}
 
 		if peer.Relay == "" {
-			fmt.Println("peer no relay")
+			logF("peer no relay")
 			continue
 		}
 
-		// fmt.Println("Peer active with relay", cliui.Code(peer.Relay))
+		logF("Peer active with relay %s", cliui.Code(peer.Relay))
 
 		if len(peer.TailscaleIPs) == 0 {
-			fmt.Println("peer has no ips (developer error)")
+			logF("peer has no ips (developer error)")
 			continue
 		}
 
@@ -206,7 +204,7 @@ func waitUntilHasPeerHasIP(ctx context.Context, lc *tailscale.LocalClient) (neti
 	}
 }
 
-func waitUntilHasP2P(ctx context.Context, lc *tailscale.LocalClient) error {
+func waitUntilHasP2P(ctx context.Context, logF func(str string, args ...any), lc *tailscale.LocalClient) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -216,26 +214,24 @@ func waitUntilHasP2P(ctx context.Context, lc *tailscale.LocalClient) error {
 
 		stat, err := lc.Status(ctx)
 		if err != nil {
-			fmt.Println("error getting lc status:", err)
+			logF("error getting lc status: %s", err)
 			continue
 		}
 
 		peers := stat.Peers()
 		peer, ok := stat.Peer[peers[0]]
 		if !ok {
-			fmt.Println("no peer found in map while waiting p2p (developer error)")
+			logF("no peer found in map while waiting p2p (developer error)")
 			continue
 		}
 
 		if peer.Relay == "" {
-			fmt.Println("peer no relay")
+			logF("peer no relay")
 			continue
 		}
 
-		// fmt.Println("Peer active with relay", cliui.Code(peer.Relay))
-
 		if len(peer.TailscaleIPs) == 0 {
-			fmt.Println("peer has no ips (developer error)")
+			logF("peer has no ips (developer error)")
 			continue
 		}
 
@@ -243,16 +239,16 @@ func waitUntilHasP2P(ctx context.Context, lc *tailscale.LocalClient) error {
 		pong, err := lc.Ping(pingCancel, peer.TailscaleIPs[0], tailcfg.PingDisco)
 		cancel()
 		if err != nil {
-			fmt.Println("ping failed:", err)
+			logF("ping failed: %s", err)
 			continue
 		}
 
 		if pong.Endpoint == "" {
-			fmt.Println("not p2p yet")
+			logF("Not p2p yet")
 			continue
 		}
 
-		// fmt.Println("Peer active over p2p", cliui.Code(pong.Endpoint))
+		logF("Peer active over p2p %s", cliui.Code(pong.Endpoint))
 		return nil
 	}
 }

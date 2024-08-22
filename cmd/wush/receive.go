@@ -22,14 +22,11 @@ import (
 	"github.com/coder/wush/tsserver"
 )
 
-func logF(format string, args ...any) {
-	fmt.Printf(format+"\n", args...)
-}
-
 func receiveCmd() *serpent.Command {
 	var overlayType string
 	return &serpent.Command{
-		Use: "receive",
+		Use:  "receive",
+		Long: "Runs the wush server. Allows other wush CLIs to connect to this computer.",
 		Handler: func(inv *serpent.Invocation) error {
 			ctx := inv.Context()
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -112,9 +109,10 @@ func newTSNet(direction string) (*tsnet.Server, error) {
 	srv.Ephemeral = true
 	srv.AuthKey = direction
 	srv.ControlURL = "http://localhost:8080"
-	srv.Logf = logF
+	srv.Logf = func(format string, args ...any) {}
+	srv.UserLogf = func(format string, args ...any) {}
 
-	srv.Store, err = store.New(logF, "mem:wush")
+	srv.Store, err = store.New(func(format string, args ...any) {}, "mem:wush")
 	if err != nil {
 		return nil, xerrors.Errorf("create state store: %w", err)
 	}
