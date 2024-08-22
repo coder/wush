@@ -37,10 +37,9 @@ func sshCmd() *serpent.Command {
 		Handler: func(inv *serpent.Invocation) error {
 			ctx := inv.Context()
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-
 			if authID == "" {
 				err := huh.NewInput().
-					Title("Enter your Auth ID:").
+					Title("Enter the receiver's Auth ID:").
 					Value(&authID).
 					Run()
 				if err != nil {

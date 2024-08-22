@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/netip"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -76,9 +77,10 @@ func rsyncCmd() *serpent.Command {
 			fmt.Println("\t> Server overlay public key:  ", cliui.Code(send.Auth.ReceiverPublicKey.ShortString()))
 			fmt.Println("\t> Server overlay auth key:    ", cliui.Code(send.Auth.OverlayPrivateKey.Public().ShortString()))
 
+			progPath := os.Args[0]
 			args := []string{
 				"-c",
-				"rsync --progress --stats -avz --human-readable " + fmt.Sprintf("-e=\"wush --auth-id %s --stdio --\" ", send.Auth.AuthKey()) + strings.Join(inv.Args, " "),
+				"rsync --progress --stats -avz --human-readable " + fmt.Sprintf("-e=\"%s --auth-id %s --stdio --\" ", progPath, send.Auth.AuthKey()) + strings.Join(inv.Args, " "),
 			}
 			fmt.Println("Running: rsync", args)
 			cmd := exec.CommandContext(ctx, "sh", args...)

@@ -8,6 +8,7 @@ set up a relay server.
 
 ## Basic Usage
 
+Install:
 ```
 go install github.com/coder/wush/cmd/wush@latest
 ```

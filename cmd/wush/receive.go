@@ -27,9 +27,7 @@ func logF(format string, args ...any) {
 }
 
 func receiveCmd() *serpent.Command {
-	var (
-		overlayType string
-	)
+	var overlayType string
 	return &serpent.Command{
 		Use: "receive",
 		Handler: func(inv *serpent.Invocation) error {
@@ -62,7 +60,7 @@ func receiveCmd() *serpent.Command {
 
 			fmt.Println("Your auth key is:")
 			fmt.Println("\t>", cliui.Code(r.ClientAuth().AuthKey()))
-			fmt.Println("Use this key to authenticate other", cliui.Code("wush"), "commands to authenticate to this instance.")
+			fmt.Println("Use this key to authenticate other", cliui.Code("wush"), "commands to this instance.")
 
 			s, err := tsserver.NewServer(ctx, logger, r)
 			if err != nil {
