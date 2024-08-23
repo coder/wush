@@ -15,6 +15,7 @@ import (
 	"tailscale.com/tsnet"
 
 	cslog "cdr.dev/slog"
+	csloghuman "cdr.dev/slog/sloggers/sloghuman"
 	"github.com/coder/coder/v2/agent/agentssh"
 	"github.com/coder/serpent"
 	"github.com/coder/wush/cliui"
@@ -23,14 +24,21 @@ import (
 )
 
 func receiveCmd() *serpent.Command {
-	var overlayType string
+	var (
+		overlayType string
+		verbose     bool
+	)
 	return &serpent.Command{
 		Use:     "receive",
 		Aliases: []string{"host"},
 		Long:    "Runs the wush server. Allows other wush CLIs to connect to this computer.",
 		Handler: func(inv *serpent.Invocation) error {
 			ctx := inv.Context()
-			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			var logSink io.Writer = io.Discard
+			if verbose {
+				logSink = inv.Stderr
+			}
+			logger := slog.New(slog.NewTextHandler(logSink, nil))
 			dm, err := tsserver.DERPMapTailscale(ctx)
 			if err != nil {
 				return err
@@ -77,7 +85,12 @@ func receiveCmd() *serpent.Command {
 
 			fmt.Println(cliui.Timestamp(time.Now()), "Wireguard is ready")
 
-			sshSrv, err := agentssh.NewServer(ctx, cslog.Make( /* sloghuman.Sink(os.Stderr)*/ ), prometheus.NewRegistry(), fs, nil)
+			sshSrv, err := agentssh.NewServer(ctx,
+				cslog.Make(csloghuman.Sink(logSink)),
+				prometheus.NewRegistry(),
+				fs,
+				nil,
+			)
 			if err != nil {
 				return err
 			}
@@ -87,13 +100,32 @@ func receiveCmd() *serpent.Command {
 				return err
 			}
 
-			return sshSrv.Serve(ls)
+			go func() {
+				fmt.Println(cliui.Timestamp(time.Now()), "SSH server listening")
+				err := sshSrv.Serve(ls)
+				if err != nil {
+					logger.Info("ssh server exited", "err", err)
+				}
+			}()
+
+			ctx, ctxCancel := inv.SignalNotifyContext(ctx, os.Interrupt)
+			defer ctxCancel()
+
+			<-ctx.Done()
+			return sshSrv.Close()
 		},
 		Options: []serpent.Option{
 			{
 				Flag:    "overlay-type",
 				Default: "derp",
 				Value:   serpent.EnumOf(&overlayType, "derp", "stun"),
+			},
+			{
+				Flag:          "verbose",
+				FlagShorthand: "v",
+				Description:   "Enable verbose logging.",
+				Default:       "false",
+				Value:         serpent.BoolOf(&verbose),
 			},
 		},
 	}

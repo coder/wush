@@ -23,17 +23,19 @@ import (
 
 func sshCmd() *serpent.Command {
 	var (
-		authID             string
+		authKey            string
 		waitP2P            bool
 		stunAddrOverride   string
 		stunAddrOverrideIP netip.Addr
 		sshStdio           bool
 	)
 	return &serpent.Command{
-		Use: "wush",
+		Use:     "wush",
+		Aliases: []string{"ssh"},
 		Long: "Opens an SSH connection to a " + cliui.Code("wush") + " peer. " +
 			"Use " + cliui.Code("wush receive") + " on the computer you would like to connect to.",
 		Handler: func(inv *serpent.Invocation) error {
+
 			ctx := inv.Context()
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 			logF := func(str string, args ...any) {
@@ -42,10 +44,10 @@ func sshCmd() *serpent.Command {
 				}
 				fmt.Fprintf(inv.Stderr, str+"\n", args...)
 			}
-			if authID == "" {
+			if authKey == "" {
 				err := huh.NewInput().
-					Title("Enter the receiver's Auth ID:").
-					Value(&authID).
+					Title("Enter the receiver's Auth key:").
+					Value(&authKey).
 					Run()
 				if err != nil {
 					return fmt.Errorf("get auth id: %w", err)
@@ -67,7 +69,7 @@ func sshCmd() *serpent.Command {
 			send := overlay.NewSendOverlay(logger, dm)
 			send.STUNIPOverride = stunAddrOverrideIP
 
-			err = send.Auth.Parse(authID)
+			err = send.Auth.Parse(authKey)
 			if err != nil {
 				return fmt.Errorf("parse auth key: %w", err)
 			}
@@ -133,11 +135,11 @@ func sshCmd() *serpent.Command {
 		},
 		Options: []serpent.Option{
 			{
-				Flag:        "auth-id",
-				Env:         "WUSH_AUTH_ID",
-				Description: "The auth id returned by " + cliui.Code("wush receive") + ". If not provided, it will be asked for on startup.",
+				Flag:        "auth",
+				Env:         "WUSH_AUTH",
+				Description: "The auth key returned by " + cliui.Code("wush receive") + ". If not provided, it will be asked for on startup.",
 				Default:     "",
-				Value:       serpent.StringOf(&authID),
+				Value:       serpent.StringOf(&authKey),
 			},
 			{
 				Flag:    "stun-ip-override",
