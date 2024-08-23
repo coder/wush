@@ -156,7 +156,7 @@ func sshCmd() *serpent.Command {
 				Flag:        "wait-p2p",
 				Description: "Waits for the connection to be p2p.",
 				Default:     "false",
-				Value:       serpent.BoolOf(&sshStdio),
+				Value:       serpent.BoolOf(&waitP2P),
 			},
 		},
 	}
