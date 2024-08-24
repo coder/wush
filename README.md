@@ -31,7 +31,7 @@ On the client machine:
 ```bash
 $ wush
 ┃ Enter the receiver's Auth key:
-| > 112v1RyL5KPzsbMbhT7fkEGrcfpygxtnvwjR5kMLGxDHGeLTK1BvoPqsUcjo7xyMkFn46KLTdedKuPCG5trP84mz9kx
+┃ > 112v1RyL5KPzsbMbhT7fkEGrcfpygxtnvwjR5kMLGxDHGeLTK1BvoPqsUcjo7xyMkFn46KLTdedKuPCG5trP84mz9kx
 Auth information:
     > Server overlay STUN address:  Disabled
     > Server overlay DERP home:     Toronto

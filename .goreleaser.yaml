@@ -1,12 +1,12 @@
 builds:
-  - dir: "./cmd/wush"
+  - main: "./cmd/wush"
     env:
       - CGO_ENABLED=0
     mod_timestamp: "{{ .CommitTimestamp }}"
     flags:
       - -trimpath
     ldflags:
-      - "-s -w -X main.version={{.Version}} -X main.commit={{.Commit}}"
+      - "-s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.commitDate={{.CommitTimestamp}}"
     goos:
       - freebsd
       - windows
@@ -32,7 +32,7 @@ nfpms:
     description: |-
       Wush installer package.
       Wush creates secure Wireguard tunnels between two devices.
-    license: CC0
+    license: CC0-1.0
     contents:
       - src: LICENSE
         dst: "/usr/share/doc/{{ .ProjectName }}/copyright"

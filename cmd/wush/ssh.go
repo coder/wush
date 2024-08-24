@@ -30,8 +30,8 @@ func sshCmd() *serpent.Command {
 		sshStdio           bool
 	)
 	return &serpent.Command{
-		Use:     "wush",
-		Aliases: []string{"ssh"},
+		Use:     "ssh",
+		Aliases: []string{},
 		Long: "Opens an SSH connection to a " + cliui.Code("wush") + " peer. " +
 			"Use " + cliui.Code("wush receive") + " on the computer you would like to connect to.",
 		Handler: func(inv *serpent.Invocation) error {

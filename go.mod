@@ -12,11 +12,12 @@ require (
 	github.com/charmbracelet/huh v0.4.2
 	github.com/coder/coder/v2 v2.14.1
 	github.com/coder/pretty v0.0.0-20230908205945-e89ba86370e0
-	github.com/coder/serpent v0.7.0
+	github.com/coder/serpent v0.7.1-0.20240823180923-556f4d27e175
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/google/uuid v1.6.0
 	github.com/klauspost/compress v1.17.9
 	github.com/mattn/go-isatty v0.0.20
+	github.com/mitchellh/go-wordwrap v1.0.1
 	github.com/muesli/termenv v0.15.2
 	github.com/pion/stun/v3 v3.0.0
 	github.com/prometheus/client_golang v1.19.1
@@ -141,7 +142,6 @@ require (
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
-	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.1-0.20231216201459-8508981c8b6c // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
