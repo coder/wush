@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/afero"
 	"golang.org/x/xerrors"
 	"tailscale.com/ipn/store"
@@ -31,6 +34,7 @@ func receiveCmd() *serpent.Command {
 	return &serpent.Command{
 		Use:     "receive",
 		Aliases: []string{"host"},
+		Short:   "Run the wush server.",
 		Long:    "Runs the wush server. Allows other wush CLIs to connect to this computer.",
 		Handler: func(inv *serpent.Invocation) error {
 			ctx := inv.Context()
@@ -95,18 +99,56 @@ func receiveCmd() *serpent.Command {
 				return err
 			}
 
-			ls, err := ts.Listen("tcp", ":3")
+			sshListener, err := ts.Listen("tcp", ":3")
 			if err != nil {
 				return err
 			}
 
 			go func() {
 				fmt.Println(cliui.Timestamp(time.Now()), "SSH server listening")
-				err := sshSrv.Serve(ls)
+				err := sshSrv.Serve(sshListener)
 				if err != nil {
 					logger.Info("ssh server exited", "err", err)
 				}
 			}()
+
+			cpListener, err := ts.Listen("tcp", ":4444")
+			if err != nil {
+				return err
+			}
+
+			go http.Serve(cpListener, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "POST" {
+					w.WriteHeader(http.StatusOK)
+					w.Write([]byte("OK"))
+					return
+				}
+
+				fiName := strings.TrimPrefix(r.URL.Path, "/")
+				defer r.Body.Close()
+
+				fi, err := os.OpenFile(fiName, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+
+				bar := progressbar.DefaultBytes(
+					r.ContentLength,
+					fmt.Sprintf("Downloading %q", fiName),
+				)
+				_, err = io.Copy(io.MultiWriter(fi, bar), r.Body)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				fi.Close()
+				bar.Close()
+
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(fmt.Sprintf("File %q written", fiName)))
+				fmt.Printf("Received file %s from %s\n", fiName, r.RemoteAddr)
+			}))
 
 			ctx, ctxCancel := inv.SignalNotifyContext(ctx, os.Interrupt)
 			defer ctxCancel()

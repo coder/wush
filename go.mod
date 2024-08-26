@@ -22,6 +22,7 @@ require (
 	github.com/pion/stun/v3 v3.0.0
 	github.com/prometheus/client_golang v1.19.1
 	github.com/puzpuzpuz/xsync/v3 v3.2.0
+	github.com/schollz/progressbar/v3 v3.14.6
 	github.com/spf13/afero v1.11.0
 	github.com/valyala/fasthttp v1.55.0
 	go4.org/mem v0.0.0-20220726221520-4f986261bf13
@@ -139,6 +140,7 @@ require (
 	github.com/mdlayher/sdnotify v1.0.0 // indirect
 	github.com/mdlayher/socket v0.5.0 // indirect
 	github.com/miekg/dns v1.1.58 // indirect
+	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect

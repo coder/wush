@@ -46,6 +46,7 @@ func main() {
 			sshCmd(),
 			receiveCmd(),
 			rsyncCmd(),
+			cpCmd(),
 		},
 		Options: []serpent.Option{
 			{

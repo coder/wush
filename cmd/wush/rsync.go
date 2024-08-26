@@ -26,7 +26,8 @@ func rsyncCmd() *serpent.Command {
 		sshStdio           bool
 	)
 	return &serpent.Command{
-		Use: "rsync [flags] -- [rsync args]",
+		Use:   "rsync [flags] -- [rsync args]",
+		Short: "Transfer files over rsync.",
 		Long: "Runs rsync to transfer files to a " + cliui.Code("wush") + " peer. " +
 			"Use " + cliui.Code("wush receive") + " on the computer you would like to connect to." +
 			"\n\n" +
@@ -81,11 +82,13 @@ func rsyncCmd() *serpent.Command {
 
 			progPath := os.Args[0]
 			args := []string{
-				"-e", fmt.Sprintf("%s --auth-id %s --stdio --", progPath, send.Auth.AuthKey()),
+				"-c",
+				fmt.Sprintf(`rsync -e "%s ssh --auth-key %s --stdio --" %s`,
+					progPath, send.Auth.AuthKey(), strings.Join(inv.Args, " "),
+				),
 			}
-			args = append(args, inv.Args...)
 			fmt.Println("Running: rsync", strings.Join(args, " "))
-			cmd := exec.CommandContext(ctx, "rsync", args...)
+			cmd := exec.CommandContext(ctx, "sh", args...)
 			cmd.Stdin = inv.Stdin
 			cmd.Stdout = inv.Stdout
 			cmd.Stderr = inv.Stderr
@@ -94,9 +97,9 @@ func rsyncCmd() *serpent.Command {
 		},
 		Options: []serpent.Option{
 			{
-				Flag:        "auth-id",
-				Env:         "WUSH_AUTH_ID",
-				Description: "The auth id returned by " + cliui.Code("wush receive") + ". If not provided, it will be asked for on startup.",
+				Flag:        "auth-key",
+				Env:         "WUSH_AUTH_KEY",
+				Description: "The auth key returned by " + cliui.Code("wush receive") + ". If not provided, it will be asked for on startup.",
 				Default:     "",
 				Value:       serpent.StringOf(&authID),
 			},
