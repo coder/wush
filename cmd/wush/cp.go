@@ -18,14 +18,92 @@ import (
 	"github.com/coder/wush/tsserver"
 	"github.com/schollz/progressbar/v3"
 	"tailscale.com/net/netns"
+	"tailscale.com/types/ptr"
 )
+
+func initLogger(verbose, quiet *bool, slogger *slog.Logger, logf *func(str string, args ...any)) serpent.MiddlewareFunc {
+	return func(next serpent.HandlerFunc) serpent.HandlerFunc {
+		return func(i *serpent.Invocation) error {
+			if *verbose {
+				*slogger = *slog.New(slog.NewTextHandler(i.Stderr, nil))
+			} else {
+				*slogger = *slog.New(slog.NewTextHandler(io.Discard, nil))
+			}
+
+			*logf = func(str string, args ...any) {
+				if !*quiet {
+					fmt.Fprintf(i.Stderr, str+"\n", args...)
+				}
+			}
+
+			return next(i)
+		}
+	}
+}
+
+func initAuth(authFlag *string, ca *overlay.ClientAuth) serpent.MiddlewareFunc {
+	return func(next serpent.HandlerFunc) serpent.HandlerFunc {
+		return func(i *serpent.Invocation) error {
+			if *authFlag == "" {
+				err := huh.NewInput().
+					Title("Enter your Auth ID:").
+					Value(authFlag).
+					Run()
+				if err != nil {
+					return fmt.Errorf("get auth id: %w", err)
+				}
+			}
+
+			err := ca.Parse(*authFlag)
+			if err != nil {
+				return fmt.Errorf("parse auth key: %w", err)
+			}
+
+			return next(i)
+		}
+	}
+}
+
+func sendOverlayMW(opts *sendOverlayOpts, send **overlay.Send, logger *slog.Logger, logf *func(str string, args ...any)) serpent.MiddlewareFunc {
+	return func(next serpent.HandlerFunc) serpent.HandlerFunc {
+		return func(i *serpent.Invocation) error {
+			dm, err := tsserver.DERPMapTailscale(i.Context())
+			if err != nil {
+				return err
+			}
+
+			newSend := overlay.NewSendOverlay(logger, dm)
+			newSend.Auth = opts.clientAuth
+			if opts.stunAddrOverride != "" {
+				newSend.STUNIPOverride, err = netip.ParseAddr(opts.stunAddrOverride)
+				if err != nil {
+					return fmt.Errorf("parse stun addr override: %w", err)
+				}
+			}
+
+			newSend.Auth.PrintDebug(*logf, dm)
+
+			*send = newSend
+			return next(i)
+		}
+	}
+}
+
+type sendOverlayOpts struct {
+	authKey          string
+	clientAuth       overlay.ClientAuth
+	waitP2P          bool
+	stunAddrOverride string
+}
 
 func cpCmd() *serpent.Command {
 	var (
-		authID             string
-		waitP2P            bool
-		stunAddrOverride   string
-		stunAddrOverrideIP netip.Addr
+		verbose bool
+		logger  = new(slog.Logger)
+		logf    = func(str string, args ...any) {}
+
+		overlayOpts = new(sendOverlayOpts)
+		send        = new(overlay.Send)
 	)
 	return &serpent.Command{
 		Use:   "cp <file>",
@@ -33,57 +111,12 @@ func cpCmd() *serpent.Command {
 		Long:  "Transfer files to a " + cliui.Code("wush") + " peer. ",
 		Middleware: serpent.Chain(
 			serpent.RequireNArgs(1),
+			initLogger(&verbose, ptr.To(false), logger, &logf),
+			initAuth(&overlayOpts.authKey, &overlayOpts.clientAuth),
+			sendOverlayMW(overlayOpts, &send, logger, &logf),
 		),
 		Handler: func(inv *serpent.Invocation) error {
 			ctx := inv.Context()
-			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-			logF := func(str string, args ...any) {
-				fmt.Fprintf(inv.Stderr, str+"\n", args...)
-			}
-
-			if authID == "" {
-				err := huh.NewInput().
-					Title("Enter your Auth ID:").
-					Value(&authID).
-					Run()
-				if err != nil {
-					return fmt.Errorf("get auth id: %w", err)
-				}
-			}
-
-			dm, err := tsserver.DERPMapTailscale(ctx)
-			if err != nil {
-				return err
-			}
-
-			if stunAddrOverride != "" {
-				stunAddrOverrideIP, err = netip.ParseAddr(stunAddrOverride)
-				if err != nil {
-					return fmt.Errorf("parse stun addr override: %w", err)
-				}
-			}
-
-			send := overlay.NewSendOverlay(logger, dm)
-			send.STUNIPOverride = stunAddrOverrideIP
-
-			err = send.Auth.Parse(authID)
-			if err != nil {
-				return fmt.Errorf("parse auth key: %w", err)
-			}
-
-			logF("Auth information:")
-			stunStr := send.Auth.ReceiverStunAddr.String()
-			if !send.Auth.ReceiverStunAddr.IsValid() {
-				stunStr = "Disabled"
-			}
-			logF("\t> Server overlay STUN address: %s", cliui.Code(stunStr))
-			derpStr := "Disabled"
-			if send.Auth.ReceiverDERPRegionID > 0 {
-				derpStr = dm.Regions[int(send.Auth.ReceiverDERPRegionID)].RegionName
-			}
-			logF("\t> Server overlay DERP home:    %s", cliui.Code(derpStr))
-			logF("\t> Server overlay public key:   %s", cliui.Code(send.Auth.ReceiverPublicKey.ShortString()))
-			logF("\t> Server overlay auth key:     %s", cliui.Code(send.Auth.OverlayPrivateKey.Public().ShortString()))
 
 			s, err := tsserver.NewServer(ctx, logger, send)
 			if err != nil {
@@ -107,22 +140,22 @@ func cpCmd() *serpent.Command {
 			ts.Logf = func(string, ...any) {}
 			ts.UserLogf = func(string, ...any) {}
 
-			logF("Bringing Wireguard up..")
+			logf("Bringing Wireguard up..")
 			ts.Up(ctx)
-			logF("Wireguard is ready!")
+			logf("Wireguard is ready!")
 
 			lc, err := ts.LocalClient()
 			if err != nil {
 				return err
 			}
 
-			ip, err := waitUntilHasPeerHasIP(ctx, logF, lc)
+			ip, err := waitUntilHasPeerHasIP(ctx, logf, lc)
 			if err != nil {
 				return err
 			}
 
-			if waitP2P {
-				err := waitUntilHasP2P(ctx, logF, lc)
+			if overlayOpts.waitP2P {
+				err := waitUntilHasP2P(ctx, logf, lc)
 				if err != nil {
 					return err
 				}
@@ -172,22 +205,29 @@ func cpCmd() *serpent.Command {
 		},
 		Options: []serpent.Option{
 			{
-				Flag:        "auth-id",
-				Env:         "WUSH_AUTH_ID",
-				Description: "The auth id returned by " + cliui.Code("wush receive") + ". If not provided, it will be asked for on startup.",
+				Flag:        "auth-key",
+				Env:         "WUSH_AUTH_key",
+				Description: "The auth key returned by " + cliui.Code("wush receive") + ". If not provided, it will be asked for on startup.",
 				Default:     "",
-				Value:       serpent.StringOf(&authID),
+				Value:       serpent.StringOf(&overlayOpts.authKey),
 			},
 			{
 				Flag:    "stun-ip-override",
 				Default: "",
-				Value:   serpent.StringOf(&stunAddrOverride),
+				Value:   serpent.StringOf(&overlayOpts.stunAddrOverride),
 			},
 			{
 				Flag:        "wait-p2p",
 				Description: "Waits for the connection to be p2p.",
 				Default:     "false",
-				Value:       serpent.BoolOf(&waitP2P),
+				Value:       serpent.BoolOf(&overlayOpts.waitP2P),
+			},
+			{
+				Flag:          "verbose",
+				FlagShorthand: "v",
+				Description:   "Enable verbose logging.",
+				Default:       "false",
+				Value:         serpent.BoolOf(&verbose),
 			},
 		},
 	}

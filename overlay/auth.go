@@ -8,7 +8,9 @@ import (
 	"net/netip"
 
 	"github.com/btcsuite/btcd/btcutil/base58"
+	"github.com/coder/wush/cliui"
 	"go4.org/mem"
+	"tailscale.com/tailcfg"
 	"tailscale.com/types/key"
 )
 
@@ -26,6 +28,22 @@ type ClientAuth struct {
 	// ReceiverDERPRegionID is the region id that the receiver is reachable over
 	// DERP when the overlay is running in DERP mode.
 	ReceiverDERPRegionID uint16
+}
+
+func (ca *ClientAuth) PrintDebug(logf func(str string, args ...any), dm *tailcfg.DERPMap) {
+	logf("Auth information:")
+	stunStr := ca.ReceiverStunAddr.String()
+	if !ca.ReceiverStunAddr.IsValid() {
+		stunStr = "Disabled"
+	}
+	logf("\t> Server overlay STUN address: %s", cliui.Code(stunStr))
+	derpStr := "Disabled"
+	if ca.ReceiverDERPRegionID > 0 {
+		derpStr = dm.Regions[int(ca.ReceiverDERPRegionID)].RegionName
+	}
+	logf("\t> Server overlay DERP home:    %s", cliui.Code(derpStr))
+	logf("\t> Server overlay public key:   %s", cliui.Code(ca.ReceiverPublicKey.ShortString()))
+	logf("\t> Server overlay auth key:     %s", cliui.Code(ca.OverlayPrivateKey.Public().ShortString()))
 }
 
 func (ca *ClientAuth) AuthKey() string {
@@ -58,6 +76,7 @@ func (ca *ClientAuth) Parse(authKey string) error {
 		return errors.New("auth key should not be empty")
 	}
 
+	fmt.Println(base58.Decode(authKey))
 	decr := bytes.NewReader(base58.Decode(authKey))
 
 	ipLenB, err := decr.ReadByte()

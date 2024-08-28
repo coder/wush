@@ -4,12 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/netip"
 	"time"
 
-	"github.com/charmbracelet/huh"
 	"tailscale.com/client/tailscale"
 	"tailscale.com/net/netns"
 	"tailscale.com/tailcfg"
@@ -23,11 +21,12 @@ import (
 
 func sshCmd() *serpent.Command {
 	var (
-		authKey            string
-		waitP2P            bool
-		stunAddrOverride   string
-		stunAddrOverrideIP netip.Addr
-		sshStdio           bool
+		verbose     bool
+		quiet       bool
+		logger      = new(slog.Logger)
+		logf        = func(str string, args ...any) {}
+		overlayOpts = new(sendOverlayOpts)
+		send        = new(overlay.Send)
 	)
 	return &serpent.Command{
 		Use:     "ssh",
@@ -35,58 +34,13 @@ func sshCmd() *serpent.Command {
 		Short:   "Open a shell.",
 		Long: "Opens an SSH connection to a " + cliui.Code("wush") + " peer. " +
 			"Use " + cliui.Code("wush receive") + " on the computer you would like to connect to.",
+		Middleware: serpent.Chain(
+			initLogger(&verbose, &quiet, logger, &logf),
+			initAuth(&overlayOpts.authKey, &overlayOpts.clientAuth),
+			sendOverlayMW(overlayOpts, &send, logger, &logf),
+		),
 		Handler: func(inv *serpent.Invocation) error {
 			ctx := inv.Context()
-			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-			logF := func(str string, args ...any) {
-				if sshStdio {
-					return
-				}
-				fmt.Fprintf(inv.Stderr, str+"\n", args...)
-			}
-			if authKey == "" {
-				err := huh.NewInput().
-					Title("Enter the receiver's Auth key:").
-					Value(&authKey).
-					Run()
-				if err != nil {
-					return fmt.Errorf("get auth id: %w", err)
-				}
-			}
-
-			dm, err := tsserver.DERPMapTailscale(ctx)
-			if err != nil {
-				return err
-			}
-
-			if stunAddrOverride != "" {
-				stunAddrOverrideIP, err = netip.ParseAddr(stunAddrOverride)
-				if err != nil {
-					return fmt.Errorf("parse stun addr override: %w", err)
-				}
-			}
-
-			send := overlay.NewSendOverlay(logger, dm)
-			send.STUNIPOverride = stunAddrOverrideIP
-
-			err = send.Auth.Parse(authKey)
-			if err != nil {
-				return fmt.Errorf("parse auth key: %w", err)
-			}
-
-			logF("Auth information:")
-			stunStr := send.Auth.ReceiverStunAddr.String()
-			if !send.Auth.ReceiverStunAddr.IsValid() {
-				stunStr = "Disabled"
-			}
-			logF("\t> Server overlay STUN address: %s", cliui.Code(stunStr))
-			derpStr := "Disabled"
-			if send.Auth.ReceiverDERPRegionID > 0 {
-				derpStr = dm.Regions[int(send.Auth.ReceiverDERPRegionID)].RegionName
-			}
-			logF("\t> Server overlay DERP home:    %s", cliui.Code(derpStr))
-			logF("\t> Server overlay public key:   %s", cliui.Code(send.Auth.ReceiverPublicKey.ShortString()))
-			logF("\t> Server overlay auth key:     %s", cliui.Code(send.Auth.OverlayPrivateKey.Public().ShortString()))
 
 			s, err := tsserver.NewServer(ctx, logger, send)
 			if err != nil {
@@ -110,28 +64,28 @@ func sshCmd() *serpent.Command {
 			ts.Logf = func(string, ...any) {}
 			ts.UserLogf = func(string, ...any) {}
 
-			logF("Bringing Wireguard up..")
+			logf("Bringing Wireguard up..")
 			ts.Up(ctx)
-			logF("Wireguard is ready!")
+			logf("Wireguard is ready!")
 
 			lc, err := ts.LocalClient()
 			if err != nil {
 				return err
 			}
 
-			ip, err := waitUntilHasPeerHasIP(ctx, logF, lc)
+			ip, err := waitUntilHasPeerHasIP(ctx, logf, lc)
 			if err != nil {
 				return err
 			}
 
-			if waitP2P {
-				err := waitUntilHasP2P(ctx, logF, lc)
+			if overlayOpts.waitP2P {
+				err := waitUntilHasP2P(ctx, logf, lc)
 				if err != nil {
 					return err
 				}
 			}
 
-			return xssh.TailnetSSH(ctx, inv, ts, ip.String()+":3", sshStdio)
+			return xssh.TailnetSSH(ctx, inv, ts, ip.String()+":3", quiet)
 		},
 		Options: []serpent.Option{
 			{
@@ -139,24 +93,31 @@ func sshCmd() *serpent.Command {
 				Env:         "WUSH_AUTH_KEY",
 				Description: "The auth key returned by " + cliui.Code("wush receive") + ". If not provided, it will be asked for on startup.",
 				Default:     "",
-				Value:       serpent.StringOf(&authKey),
+				Value:       serpent.StringOf(&overlayOpts.authKey),
 			},
 			{
 				Flag:    "stun-ip-override",
 				Default: "",
-				Value:   serpent.StringOf(&stunAddrOverride),
+				Value:   serpent.StringOf(&overlayOpts.stunAddrOverride),
 			},
 			{
-				Flag:        "stdio",
-				Description: "Run SSH over stdin/stdout. This allows wush to be used as a transport for other programs, like rsync or regular ssh.",
+				Flag:        "quiet",
+				Description: "Silences all output.",
 				Default:     "false",
-				Value:       serpent.BoolOf(&sshStdio),
+				Value:       serpent.BoolOf(&quiet),
 			},
 			{
 				Flag:        "wait-p2p",
 				Description: "Waits for the connection to be p2p.",
 				Default:     "false",
-				Value:       serpent.BoolOf(&waitP2P),
+				Value:       serpent.BoolOf(&overlayOpts.waitP2P),
+			},
+			{
+				Flag:          "verbose",
+				FlagShorthand: "v",
+				Description:   "Enable verbose logging.",
+				Default:       "false",
+				Value:         serpent.BoolOf(&verbose),
 			},
 		},
 	}
