@@ -32,7 +32,7 @@ func receiveCmd() *serpent.Command {
 		verbose     bool
 	)
 	return &serpent.Command{
-		Use:     "receive",
+		Use:     "serve",
 		Aliases: []string{"host"},
 		Short:   "Run the wush server.",
 		Long:    "Runs the wush server. Allows other wush CLIs to connect to this computer.",
