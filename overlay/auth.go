@@ -76,7 +76,6 @@ func (ca *ClientAuth) Parse(authKey string) error {
 		return errors.New("auth key should not be empty")
 	}
 
-	fmt.Println(base58.Decode(authKey))
 	decr := bytes.NewReader(base58.Decode(authKey))
 
 	ipLenB, err := decr.ReadByte()

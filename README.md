@@ -34,6 +34,19 @@ Use this key to authenticate other wush commands to this instance.
 On the client machine:
 
 ```bash
+$ wush send 1gb.txt
+Auth information:
+    > Server overlay STUN address:  Disabled
+    > Server overlay DERP home:     New York City
+    > Server overlay public key:    [NFWN0]
+    > Server overlay auth key:      [mTbpN]
+Bringing Wireguard up..
+Wireguard is ready!
+Received peer
+Peer active with relay  nyc
+Peer active over p2p  172.20.0.13:53768
+Uploading "1gb.txt" 100% |██████████████████████████████████████████████| (2.1/2.1 GB, 376 MB/s)
+
 $ wush
 ┃ Enter the receiver's Auth key:
 ┃ > 112v1RyL5KPzsbMbhT7fkEGrcfpygxtnvwjR5kMLGxDHGeLTK1BvoPqsUcjo7xyMkFn46KLTdedKuPCG5trP84mz9kx
@@ -95,4 +108,5 @@ way more functionality.
 ## Acknowledgements
 
 1. [Tailscale](https://tailscale.com)
+1. [Headscale](https://github.com/juanfont/headscale)
 1. [Wireguard-go](https://github.com/WireGuard/wireguard-go)
