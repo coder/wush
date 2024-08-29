@@ -13,8 +13,8 @@ shells over a peer-to-peer wireguard connection. It's similar to
 
 > [!NOTE]  
 > `wush` uses Tailscale's [tsnet](https://tailscale.com/kb/1244/tsnet) package
-> under the hood, managed by an in-memory control server on each CLI. `wush`
-> utilizes Tailscale's public [DERP relays](https://tailscale.com/kb/1232/derp-servers),
+> under the hood, managed by an in-memory control server on each CLI. We utilize
+> Tailscale's public [DERP relays](https://tailscale.com/kb/1232/derp-servers),
 > but no Tailscale account is required.
 
 ## Install
