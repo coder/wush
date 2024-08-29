@@ -25,6 +25,15 @@ curl -fsSL https://wush.dev/install.sh | sh
 
 For a manual installation, see the [latest release](https://github.com/coder/wush/releases/latest).
 
+> [!TIP]
+> To increase transfer speeds, `wush` attempts to increase the buffer size of
+> its UDP sockets. For best performance, ensure `wush` has `CAP_NET_ADMIN`. When
+> using the installer script, this is done automatically for you.
+>
+> ```bash
+> sudo setcap cap_net_admin=eip $(which wush)
+> ```
+
 ## Basic Usage
 
 [![asciicast](https://asciinema.org/a/ZrCNiRRkeHUi5Lj3fqC3ovLqi.svg)](https://asciinema.org/a/ZrCNiRRkeHUi5Lj3fqC3ovLqi)
