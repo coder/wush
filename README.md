@@ -11,13 +11,15 @@ shells over a peer-to-peer wireguard connection. It's similar to
 1. Automatic peer-to-peer connections over UDP.
 1. Endless possibilities; rsync, ssh, etc.
 
-## Basic Usage
-
-Install:
+## Install
 
 ```bash
-go install github.com/coder/wush/cmd/wush@latest
+curl -fsSL https://wush.dev/install.sh | sh
 ```
+
+For a manual installation, see the [latest release](https://github.com/coder/wush/releases/latest).
+
+## Basic Usage
 
 [![asciicast](https://asciinema.org/a/ZrCNiRRkeHUi5Lj3fqC3ovLqi.svg)](https://asciinema.org/a/ZrCNiRRkeHUi5Lj3fqC3ovLqi)
 

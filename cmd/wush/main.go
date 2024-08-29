@@ -24,7 +24,7 @@ func main() {
 		Long: fmt.Sprintf(fmtLong, getBuildInfo().version) + formatExamples(
 			example{
 				Description: "Start the wush server",
-				Command:     "wush receive",
+				Command:     "wush serve",
 			},
 			example{
 				Description: "Open a shell to the wush host",
@@ -33,6 +33,10 @@ func main() {
 			example{
 				Description: "Transfer files to the wush host using rsync",
 				Command:     "wush rsync local-file.txt :/path/to/remote/file",
+			},
+			example{
+				Description: "Copy a single file to the host",
+				Command:     "wush cp local-file.txt",
 			},
 		),
 		Handler: func(i *serpent.Invocation) error {

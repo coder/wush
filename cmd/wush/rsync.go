@@ -28,9 +28,22 @@ func rsyncCmd() *serpent.Command {
 		Use:   "rsync [flags] -- [rsync args]",
 		Short: "Transfer files over rsync.",
 		Long: "Runs rsync to transfer files to a " + cliui.Code("wush") + " peer. " +
-			"Use " + cliui.Code("wush receive") + " on the computer you would like to connect to." +
+			"Use " + cliui.Code("wush serve") + " on the computer you would like to connect to." +
 			"\n\n" +
-			"Example: " + "wush rsync -- --progress --stats -avz --human-readable /local/path :/remote/path",
+			formatExamples(
+				example{
+					Description: "Sync a local file to the remote",
+					Command:     "wush rsync /local/path :/remote/path",
+				},
+				example{
+					Description: "Download a remote file to the local computer",
+					Command:     "wush rsync :/remote/path /local/path",
+				},
+				example{
+					Description: "Add rsync flags",
+					Command:     "wush rsync /local/path :/remote/path -- --progress --stats -avz --human-readable",
+				},
+			),
 		Middleware: serpent.Chain(
 			initLogger(&verbose, ptr.To(false), logger, &logf),
 			initAuth(&overlayOpts.authKey, &overlayOpts.clientAuth),
