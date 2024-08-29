@@ -119,7 +119,10 @@ main() {
     mkdir -p "$INSTALL_DIR"
     mv "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME.exe"
   else
-    sudo mv "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME"
+    sudo su <<EOF
+      [[ $(uname -s) == "Linux" ]] && setcap cap_net_admin=eip $BINARY_PATH
+      mv "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME"
+EOF
   fi
 
   # Clean up
