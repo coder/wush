@@ -26,7 +26,7 @@ import (
 	"github.com/coder/wush/tsserver"
 )
 
-func receiveCmd() *serpent.Command {
+func serveCmd() *serpent.Command {
 	var (
 		overlayType string
 		verbose     bool

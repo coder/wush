@@ -19,10 +19,12 @@ Install:
 go install github.com/coder/wush/cmd/wush@latest
 ```
 
+[![asciicast](https://asciinema.org/a/7Wj9y4fYz0ovJcvapD0xELDyj.svg)](https://asciinema.org/a/7Wj9y4fYz0ovJcvapD0xELDyj)
+
 On the host machine:
 
 ```bash
-$ wush receive
+$ wush host
 Picked DERP region Toronto as overlay home
 Your auth key is:
     >  112v1RyL5KPzsbMbhT7fkEGrcfpygxtnvwjR5kMLGxDHGeLTK1BvoPqsUcjo7xyMkFn46KLTdedKuPCG5trP84mz9kx
