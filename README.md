@@ -19,7 +19,7 @@ Install:
 go install github.com/coder/wush/cmd/wush@latest
 ```
 
-[![asciicast](https://asciinema.org/a/7Wj9y4fYz0ovJcvapD0xELDyj.svg)](https://asciinema.org/a/7Wj9y4fYz0ovJcvapD0xELDyj)
+[![asciicast](https://asciinema.org/a/ZrCNiRRkeHUi5Lj3fqC3ovLqi.svg)](https://asciinema.org/a/ZrCNiRRkeHUi5Lj3fqC3ovLqi)
 
 On the host machine:
 
