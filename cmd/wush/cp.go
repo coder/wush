@@ -108,7 +108,12 @@ func cpCmd() *serpent.Command {
 	return &serpent.Command{
 		Use:   "cp <file>",
 		Short: "Transfer files.",
-		Long:  "Transfer files to a " + cliui.Code("wush") + " peer. ",
+		Long: "Transfer files to a " + cliui.Code("wush") + " peer.\n" + formatExamples(
+			example{
+				Description: "Copy a local file to the remote",
+				Command:     "wush cp local-file.txt",
+			},
+		),
 		Middleware: serpent.Chain(
 			serpent.RequireNArgs(1),
 			initLogger(&verbose, ptr.To(false), logger, &logf),

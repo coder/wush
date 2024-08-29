@@ -1,3 +1,5 @@
+// Package tsserver implements the Tailscale coordination protocol for a single
+// client. Heavy inspiration was taken from https://github.com/juanfont/headscale
 package tsserver
 
 import (
