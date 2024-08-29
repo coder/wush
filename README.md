@@ -58,7 +58,7 @@ On the client machine:
 $ wush cp 1gb.txt
 Auth information:
     > Server overlay STUN address:  Disabled
-    > Server overlay DERP home:     New York City
+    > Server overlay DERP home:     Toronto
     > Server overlay public key:    [NFWN0]
     > Server overlay auth key:      [mTbpN]
 Bringing Wireguard up..
