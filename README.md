@@ -31,6 +31,7 @@ For a manual installation, see the [latest release](https://github.com/coder/wus
 > using the installer script, this is done automatically for you.
 >
 > ```bash
+> # Linux only
 > sudo setcap cap_net_admin=eip $(which wush)
 > ```
 
