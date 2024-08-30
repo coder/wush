@@ -28,7 +28,9 @@ type Styles struct {
 	FocusedPrompt,
 	Fuchsia,
 	Warn,
-	Wrap pretty.Style
+	Wrap,
+	Disabled,
+	Enabled pretty.Style
 }
 
 var (
@@ -152,6 +154,12 @@ func init() {
 		},
 		Wrap: pretty.Style{
 			pretty.LineWrap(80),
+		},
+		Disabled: pretty.Style{
+			pretty.FgColor(Red),
+		},
+		Enabled: pretty.Style{
+			pretty.FgColor(Green),
 		},
 	}
 

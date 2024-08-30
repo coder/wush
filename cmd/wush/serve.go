@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/afero"
+	xslices "golang.org/x/exp/slices"
 	"golang.org/x/xerrors"
 	"tailscale.com/ipn/store"
 	"tailscale.com/net/netns"
@@ -20,6 +21,7 @@ import (
 	cslog "cdr.dev/slog"
 	csloghuman "cdr.dev/slog/sloggers/sloghuman"
 	"github.com/coder/coder/v2/agent/agentssh"
+	"github.com/coder/pretty"
 	"github.com/coder/serpent"
 	"github.com/coder/wush/cliui"
 	"github.com/coder/wush/overlay"
@@ -30,6 +32,8 @@ func serveCmd() *serpent.Command {
 	var (
 		overlayType string
 		verbose     bool
+		enabled     = []string{}
+		disabled    = []string{}
 	)
 	return &serpent.Command{
 		Use:     "serve",
@@ -89,72 +93,64 @@ func serveCmd() *serpent.Command {
 
 			fmt.Println(cliui.Timestamp(time.Now()), "WireGuard is ready")
 
-			sshSrv, err := agentssh.NewServer(ctx,
-				cslog.Make(csloghuman.Sink(logSink)),
-				prometheus.NewRegistry(),
-				fs,
-				nil,
-			)
-			if err != nil {
-				return err
-			}
+			closers := []io.Closer{}
 
-			sshListener, err := ts.Listen("tcp", ":3")
-			if err != nil {
-				return err
-			}
-
-			go func() {
-				fmt.Println(cliui.Timestamp(time.Now()), "SSH server listening")
-				err := sshSrv.Serve(sshListener)
-				if err != nil {
-					logger.Info("ssh server exited", "err", err)
-				}
-			}()
-
-			cpListener, err := ts.Listen("tcp", ":4444")
-			if err != nil {
-				return err
-			}
-
-			go http.Serve(cpListener, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != "POST" {
-					w.WriteHeader(http.StatusOK)
-					w.Write([]byte("OK"))
-					return
-				}
-
-				fiName := strings.TrimPrefix(r.URL.Path, "/")
-				defer r.Body.Close()
-
-				fi, err := os.OpenFile(fiName, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					return
-				}
-
-				bar := progressbar.DefaultBytes(
-					r.ContentLength,
-					fmt.Sprintf("Downloading %q", fiName),
+			if xslices.Contains(enabled, "ssh") && !xslices.Contains(disabled, "ssh") {
+				sshSrv, err := agentssh.NewServer(ctx,
+					cslog.Make(csloghuman.Sink(logSink)),
+					prometheus.NewRegistry(),
+					fs,
+					nil,
 				)
-				_, err = io.Copy(io.MultiWriter(fi, bar), r.Body)
 				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					return
+					return err
 				}
-				fi.Close()
-				bar.Close()
+				closers = append(closers, sshSrv)
 
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(fmt.Sprintf("File %q written", fiName)))
-				fmt.Printf("Received file %s from %s\n", fiName, r.RemoteAddr)
-			}))
+				sshListener, err := ts.Listen("tcp", ":3")
+				if err != nil {
+					return err
+				}
+				closers = append(closers, sshListener)
+
+				fmt.Println(cliui.Timestamp(time.Now()), "SSH server "+pretty.Sprint(cliui.DefaultStyles.Enabled, "enabled"))
+				go func() {
+					err := sshSrv.Serve(sshListener)
+					if err != nil {
+						fmt.Println(cliui.Timestamp(time.Now()), "SSH server exited: "+err.Error())
+					}
+				}()
+			} else {
+				fmt.Println(cliui.Timestamp(time.Now()), "SSH server "+pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
+			}
+
+			if xslices.Contains(enabled, "cp") && !xslices.Contains(disabled, "cp") {
+				cpListener, err := ts.Listen("tcp", ":4444")
+				if err != nil {
+					return err
+				}
+				closers = append([]io.Closer{cpListener}, closers...)
+
+				fmt.Println(cliui.Timestamp(time.Now()), "File transfer server "+pretty.Sprint(cliui.DefaultStyles.Enabled, "enabled"))
+				go func() {
+					err := http.Serve(cpListener, http.HandlerFunc(cpHandler))
+					if err != nil {
+						fmt.Println(cliui.Timestamp(time.Now()), "File transfer server exited: "+err.Error())
+					}
+				}()
+			} else {
+				fmt.Println(cliui.Timestamp(time.Now()), "File transfer server "+pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
+			}
 
 			ctx, ctxCancel := inv.SignalNotifyContext(ctx, os.Interrupt)
 			defer ctxCancel()
 
+			closers = append(closers, ts)
 			<-ctx.Done()
-			return sshSrv.Close()
+			for _, closer := range closers {
+				closer.Close()
+			}
+			return nil
 		},
 		Options: []serpent.Option{
 			{
@@ -168,6 +164,18 @@ func serveCmd() *serpent.Command {
 				Description:   "Enable verbose logging.",
 				Default:       "false",
 				Value:         serpent.BoolOf(&verbose),
+			},
+			{
+				Flag:        "enable",
+				Description: "Server options to enable.",
+				Default:     "ssh,cp",
+				Value:       serpent.EnumArrayOf(&enabled, "ssh", "cp"),
+			},
+			{
+				Flag:        "disable",
+				Description: "Server options to disable.",
+				Default:     "",
+				Value:       serpent.EnumArrayOf(&disabled, "ssh", "cp"),
 			},
 		},
 	}
@@ -197,4 +205,37 @@ func newTSNet(direction string) (*tsnet.Server, error) {
 	}
 
 	return srv, nil
+}
+
+func cpHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+		return
+	}
+
+	fiName := strings.TrimPrefix(r.URL.Path, "/")
+	defer r.Body.Close()
+
+	fi, err := os.OpenFile(fiName, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	bar := progressbar.DefaultBytes(
+		r.ContentLength,
+		fmt.Sprintf("Downloading %q", fiName),
+	)
+	_, err = io.Copy(io.MultiWriter(fi, bar), r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fi.Close()
+	bar.Close()
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(fmt.Sprintf("File %q written", fiName)))
+	fmt.Printf("Received file %s from %s\n", fiName, r.RemoteAddr)
 }
