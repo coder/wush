@@ -11,7 +11,6 @@ import (
 
 	"github.com/coder/serpent"
 	"github.com/coder/wush/cliui"
-	"github.com/coder/wush/overlay"
 	"github.com/coder/wush/tsserver"
 )
 
@@ -22,7 +21,6 @@ func rsyncCmd() *serpent.Command {
 		logf    = func(str string, args ...any) {}
 
 		overlayOpts = new(sendOverlayOpts)
-		send        = new(overlay.Send)
 	)
 	return &serpent.Command{
 		Use:   "rsync [flags] -- [rsync args]",
@@ -61,9 +59,10 @@ func rsyncCmd() *serpent.Command {
 			args := []string{
 				"-c",
 				fmt.Sprintf(`rsync -e "%s ssh --auth-key %s --quiet --" %s`,
-					progPath, send.Auth.AuthKey(), strings.Join(inv.Args, " "),
+					progPath, overlayOpts.clientAuth.AuthKey(), strings.Join(inv.Args, " "),
 				),
 			}
+			fmt.Println(args)
 			fmt.Println("Running: rsync", strings.Join(inv.Args, " "))
 			cmd := exec.CommandContext(ctx, "sh", args...)
 			cmd.Stdin = inv.Stdin
