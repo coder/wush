@@ -147,8 +147,8 @@ github.com/cloudflare/circl v1.3.7 h1:qlCDlTPz2n9fu58M0Nh1J/JzcFpfgkFHHX3O35r5vc
 github.com/cloudflare/circl v1.3.7/go.mod h1:sRTcRWXGLrKw6yIGJ+l7amYJFfAXbZG0kBSc8r4zxgA=
 github.com/coadler/tailscale v1.1.1-0.20240815205130-c39ab8bcc2a9 h1:XLbLUULAjNzo8QOTqDPOIHegRNga3cgJg95srOmYM2Q=
 github.com/coadler/tailscale v1.1.1-0.20240815205130-c39ab8bcc2a9/go.mod h1:rRq+xvgprFys8sZbJgcAMMqpiP6r+Y75CJRhCRmXrd0=
-github.com/coder/coder/v2 v2.14.1 h1:tSYe7H4pNRL8hh9ynwHK7QYTOvG5hcuZJEOkn4ZPASE=
-github.com/coder/coder/v2 v2.14.1/go.mod h1:dO79BI5XlP8rrtne1JpRcVehe27bNMXdZKyn1NsWbjA=
+github.com/coder/coder/v2 v2.14.2 h1:RNNDDwjNK5D1XMQlK7LWrS4niVclkl1FXoaOaW7N5rs=
+github.com/coder/coder/v2 v2.14.2/go.mod h1:dO79BI5XlP8rrtne1JpRcVehe27bNMXdZKyn1NsWbjA=
 github.com/coder/pretty v0.0.0-20230908205945-e89ba86370e0 h1:3A0ES21Ke+FxEM8CXx9n47SZOKOpgSE1bbJzlE4qPVs=
 github.com/coder/pretty v0.0.0-20230908205945-e89ba86370e0/go.mod h1:5UuS2Ts+nTToAMeOjNlnHFkPahrtDkmpydBen/3wgZc=
 github.com/coder/serpent v0.8.0 h1:6OR+k6fekhSeEDmwwzBgnSjaa7FfGGrMlc3GoAEH9dg=
