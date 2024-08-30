@@ -342,7 +342,15 @@ func (r *Receive) handleNextMessage(msg []byte, system string) (resRaw []byte, n
 	case messageTypeHello:
 		res.Typ = messageTypeHelloResponse
 		res.IP = r.assignNextIP()
-		fmt.Println(cliui.Timestamp(time.Now()), "Received connection request over", system)
+		username := "unknown"
+		if u := ovMsg.HostInfo.Username; u != "" {
+			username = u
+		}
+		hostname := "unknown"
+		if h := ovMsg.HostInfo.Hostname; h != "" {
+			hostname = h
+		}
+		fmt.Println(cliui.Timestamp(time.Now()), "Received connection request over", system, "from", cliui.Keyword(fmt.Sprintf("%s@%s", username, hostname)))
 	case messageTypeNodeUpdate:
 		fmt.Println(cliui.Timestamp(time.Now()), "Received updated node from", cliui.Code(ovMsg.Node.Key.String()))
 		r.in <- &ovMsg.Node

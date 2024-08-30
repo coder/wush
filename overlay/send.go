@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"net"
 	"net/netip"
+	"os"
+	"os/user"
 	"sync"
 	"time"
 
@@ -68,19 +70,12 @@ func (s *Send) ListenOverlaySTUN(ctx context.Context) error {
 		_ = conn.Close()
 	}()
 
-	raw, err := json.Marshal(overlayMessage{
-		Typ: messageTypeHello,
-	})
-	if err != nil {
-		panic("marshal node: " + err.Error())
-	}
-
+	sealed := s.newHelloPacket()
 	receiverAddr := s.Auth.ReceiverStunAddr
 	if s.STUNIPOverride.IsValid() {
 		receiverAddr = netip.AddrPortFrom(s.STUNIPOverride, s.Auth.ReceiverStunAddr.Port())
 	}
 
-	sealed := s.Auth.OverlayPrivateKey.SealTo(s.Auth.ReceiverPublicKey, raw)
 	_, err = conn.WriteToUDPAddrPort(sealed, receiverAddr)
 	if err != nil {
 		return fmt.Errorf("send overlay hello over STUN: %w", err)
@@ -168,14 +163,7 @@ func (s *Send) ListenOverlayDERP(ctx context.Context) error {
 		return err
 	}
 
-	raw, err := json.Marshal(overlayMessage{
-		Typ: messageTypeHello,
-	})
-	if err != nil {
-		panic("marshal node: " + err.Error())
-	}
-
-	sealed := s.Auth.OverlayPrivateKey.SealTo(s.Auth.ReceiverPublicKey, raw)
+	sealed := s.newHelloPacket()
 	err = c.Send(s.Auth.ReceiverPublicKey, sealed)
 	if err != nil {
 		return fmt.Errorf("send overlay hello over derp: %w", err)
@@ -234,6 +222,34 @@ func (s *Send) ListenOverlayDERP(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+func (s *Send) newHelloPacket() []byte {
+	var (
+		username,
+		hostname string
+	)
+
+	cu, _ := user.Current()
+	if cu != nil {
+		username = cu.Username
+	}
+	hostname, _ = os.Hostname()
+
+	raw, err := json.Marshal(overlayMessage{
+		Typ: messageTypeHello,
+		HostInfo: HostInfo{
+			Username: username,
+			Hostname: hostname,
+		},
+	})
+	if err != nil {
+		panic("marshal node: " + err.Error())
+	}
+
+	fmt.Println("sending", string(raw))
+	sealed := s.Auth.OverlayPrivateKey.SealTo(s.Auth.ReceiverPublicKey, raw)
+	return sealed
 }
 
 func (s *Send) handleNextMessage(msg []byte) (resRaw []byte, _ error) {

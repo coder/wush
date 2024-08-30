@@ -28,6 +28,12 @@ const (
 type overlayMessage struct {
 	Typ messageType
 
-	IP   netip.Addr
-	Node tailcfg.Node
+	HostInfo HostInfo
+	IP       netip.Addr
+	Node     tailcfg.Node
+}
+
+type HostInfo struct {
+	Username string
+	Hostname string
 }
