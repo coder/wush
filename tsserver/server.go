@@ -1,5 +1,7 @@
+// SPDX-License-Identifier: BSD-3-Clause, CC0-1.0
 // Package tsserver implements the Tailscale coordination protocol for a single
-// client. Heavy inspiration was taken from https://github.com/juanfont/headscale
+// client. Heavy inspiration and code was taken from https://github.com/juanfont/headscale.
+// As such, this file is dual licensed under BSD-3-Clause and CC0-1.0.
 package tsserver
 
 import (
@@ -22,9 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/coder/wush/overlay"
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"github.com/klauspost/compress/zstd"
 	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/valyala/fasthttp/fasthttputil"
@@ -39,6 +39,8 @@ import (
 	"tailscale.com/types/key"
 	"tailscale.com/types/opt"
 	"tailscale.com/types/ptr"
+
+	"github.com/coder/wush/overlay"
 )
 
 func DERPMapTailscale(ctx context.Context) (*tailcfg.DERPMap, error) {
@@ -242,7 +244,8 @@ func (s *server) NoiseUpgradeHandler(w http.ResponseWriter, r *http.Request) {
 		logger:     s.logger,
 		derpMap:    s.derpMap,
 		challenge:  key.NewChallenge(),
-		updates:    s.peerMapUpdate,
+		peers:      xsync.NewMapOf[tailcfg.NodeID, *tailcfg.Node](),
+		peerUpdate: s.peerMapUpdate,
 		node:       &s.node,
 		nodeUpdate: s.nodeUpdate,
 		getIP:      s.overlay.IP,
@@ -332,44 +335,15 @@ type noiseServer struct {
 	derpMap        *tailcfg.DERPMap
 	getIP          func() netip.Addr
 
-	updates    chan update
+	peers      *xsync.MapOf[tailcfg.NodeID, *tailcfg.Node]
+	peerUpdate chan update
+
 	node       *atomic.Pointer[tailcfg.Node]
 	nodeUpdate chan struct{}
 
 	// EarlyNoise-related stuff
 	challenge       key.ChallengePrivate
 	protocolVersion int
-}
-
-func maskUUID(uid uuid.UUID) uuid.UUID {
-	// This is Tailscale's ephemeral service prefix. This can be changed easily
-	// later-on, because all of our nodes are ephemeral.
-	// fd7a:115c:a1e0
-	uid[0] = 0xfd
-	uid[1] = 0x7a
-	uid[2] = 0x11
-	uid[3] = 0x5c
-	uid[4] = 0xa1
-	uid[5] = 0xe0
-	return uid
-}
-
-// IP generates a random IP with a static service prefix.
-func IP() netip.Addr {
-	uid := maskUUID(uuid.New())
-	return netip.AddrFrom16(uid)
-}
-
-// func IP4r() netip.Addr {
-// 	return netip.AddrFrom4([4]byte{100, 64, 1, 1})
-// }
-// func IP4s() netip.Addr {
-// 	return netip.AddrFrom4([4]byte{100, 64, 2, 2})
-// }
-
-// IP generates a new IP from a UUID.
-func IPFromUUID(uid uuid.UUID) netip.Addr {
-	return netip.AddrFrom16(maskUUID(uid))
 }
 
 func (ns *noiseServer) notifyUpdate() {
@@ -389,17 +363,6 @@ func (ns *noiseServer) NoiseRegistrationHandler(w http.ResponseWriter, r *http.R
 	sp := strings.SplitN(registerRequest.Auth.AuthKey, "-", 2)
 
 	ip := ns.getIP()
-	// var ip netip.Addr
-	// switch registerRequest.Auth.AuthKey {
-	// case "receive":
-	// 	ip = IP4r()
-	// case "send":
-	// 	ip = IP4s()
-	// default:
-	// 	http.Error(w, fmt.Sprintf("unknown authkey: %q", registerRequest.Auth.AuthKey), http.StatusBadRequest)
-	// 	return
-	// }
-	// try insecureskipverify
 
 	resp := tailcfg.RegisterResponse{}
 	resp.MachineAuthorized = true
@@ -506,17 +469,21 @@ func (ns *noiseServer) NoisePollNetMapHandler(
 func (ns *noiseServer) peerMap() []*tailcfg.Node {
 	peers := []*tailcfg.Node{}
 
-	// TOOD: get peers
+	ns.peers.Range(func(key tailcfg.NodeID, value *tailcfg.Node) bool {
+		peers = append(peers, value.Clone())
+		return true
+	})
+	xslices.SortFunc(peers, func(a, b *tailcfg.Node) int {
+		return cmp.Compare(a.ID, b.ID)
+	})
 
 	return peers
 }
 
 func (ns *noiseServer) handleStreaming(ctx context.Context, w http.ResponseWriter, req *tailcfg.MapRequest) {
-	// Upgrade the writer to a ResponseController
 	rc := http.NewResponseController(w)
-
-	// Longpolling will break if there is a write timeout,
-	// so it needs to be disabled.
+	// Longpolling will break if there is a write timeout, so it needs to be
+	// disabled.
 	rc.SetWriteDeadline(time.Time{})
 
 	node := ns.getSelfNode()
@@ -552,13 +519,14 @@ func (ns *noiseServer) handleStreaming(ctx context.Context, w http.ResponseWrite
 		select {
 		case <-ctx.Done():
 			return
-		case upd := <-ns.updates:
+		case upd := <-ns.peerUpdate:
 			res := &tailcfg.MapResponse{
 				KeepAlive:   false,
 				ControlTime: ptr.To(time.Now()),
 			}
 			if upd.ty == updateTypeNewPeer {
-				res.Peers = []*tailcfg.Node{upd.node}
+				ns.peers.Store(upd.node.ID, upd.node.Clone())
+				res.Peers = ns.peerMap()
 			} else if upd.ty == updateTypePeerUpdate {
 				res.PeersChangedPatch = []*tailcfg.PeerChange{upd.update}
 			}
@@ -590,7 +558,6 @@ func (ns *noiseServer) handleStreaming(ctx context.Context, w http.ResponseWrite
 			}
 		}
 	}
-
 }
 
 func writeMapResponse(w http.ResponseWriter, req *tailcfg.MapRequest, res *tailcfg.MapResponse) error {
@@ -751,7 +718,6 @@ func peerChange(req *tailcfg.MapRequest, node *tailcfg.Node) tailcfg.PeerChange 
 		}
 	}
 
-	// TODO(kradalby): Find a good way to compare updates
 	ret.Endpoints = req.Endpoints
 
 	ret.LastSeen = ptr.To(time.Now())
@@ -830,6 +796,8 @@ const (
 	earlyNoiseCapabilityVersion = 49
 	earlyPayloadMagic           = "\xff\xff\xffTS"
 )
+
+var _ = (*noiseServer)(nil).earlyNoise
 
 func (ns *noiseServer) earlyNoise(protocolVersion int, writer io.Writer) error {
 	ns.logger.Info("early noise")

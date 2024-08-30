@@ -64,9 +64,9 @@ func sshCmd() *serpent.Command {
 			ts.Logf = func(string, ...any) {}
 			ts.UserLogf = func(string, ...any) {}
 
-			logf("Bringing Wireguard up..")
+			logf("Bringing WireGuard up..")
 			ts.Up(ctx)
-			logf("Wireguard is ready!")
+			logf("WireGuard is ready!")
 
 			lc, err := ts.LocalClient()
 			if err != nil {

@@ -31,7 +31,7 @@ nfpms:
     maintainer: Colin Adler <colin@coder.com>
     description: |-
       Wush installer package.
-      Wush creates secure Wireguard tunnels between two devices.
+      Wush creates secure WireGuard tunnels between two devices.
     license: CC0-1.0
     contents:
       - src: LICENSE

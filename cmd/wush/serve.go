@@ -87,7 +87,7 @@ func serveCmd() *serpent.Command {
 			ts.Up(ctx)
 			fs := afero.NewOsFs()
 
-			fmt.Println(cliui.Timestamp(time.Now()), "Wireguard is ready")
+			fmt.Println(cliui.Timestamp(time.Now()), "WireGuard is ready")
 
 			sshSrv, err := agentssh.NewServer(ctx,
 				cslog.Make(csloghuman.Sink(logSink)),

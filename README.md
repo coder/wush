@@ -3,11 +3,11 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/coder/wush.svg)](https://pkg.go.dev/github.com/coder/wush)
 
 `wush` is a command line tool that lets you easily transfer files and open
-shells over a peer-to-peer wireguard connection. It's similar to
+shells over a peer-to-peer WireGuard connection. It's similar to
 [magic-wormhole](https://github.com/magic-wormhole/magic-wormhole) but:
 
 1. No requirement to set up or trust a relay server for authentication.
-1. Powered by Wireguard for secure, fast, and reliable connections.
+1. Powered by WireGuard for secure, fast, and reliable connections.
 1. Automatic peer-to-peer connections over UDP.
 1. Endless possibilities; rsync, ssh, etc.
 
@@ -47,7 +47,7 @@ Picked DERP region Toronto as overlay home
 Your auth key is:
     >  112v1RyL5KPzsbMbhT7fkEGrcfpygxtnvwjR5kMLGxDHGeLTK1BvoPqsUcjo7xyMkFn46KLTdedKuPCG5trP84mz9kx
 Use this key to authenticate other wush commands to this instance.
-05:18:59 Wireguard is ready
+05:18:59 WireGuard is ready
 05:18:59 SSH server listening
 ```
 
@@ -61,8 +61,8 @@ Auth information:
     > Server overlay DERP home:     Toronto
     > Server overlay public key:    [NFWN0]
     > Server overlay auth key:      [mTbpN]
-Bringing Wireguard up..
-Wireguard is ready!
+Bringing WireGuard up..
+WireGuard is ready!
 Received peer
 Peer active with relay  nyc
 Peer active over p2p  172.20.0.8:53768
@@ -77,8 +77,8 @@ Auth information:
     > Server overlay DERP home:     Toronto
     > Server overlay public key:    [sEIS1]
     > Server overlay auth key:      [w/sYF]
-Bringing Wireguard up..
-Wireguard is ready!
+Bringing WireGuard up..
+WireGuard is ready!
 Received peer
 Peer active with relay  nyc
 Peer active over p2p  172.20.0.8:44483
@@ -106,10 +106,10 @@ runs over one of two currently implemented mediums; UDP or DERP. Each message
 over the relay is encrypted with the sender's private key.
 
 **UDP**: The receiver creates a NAT holepunch to allow senders to connect
-directly. Wireguard nodes are exchanged peer-to-peer. This mode will only work
+directly. WireGuard nodes are exchanged peer-to-peer. This mode will only work
 if the receiver doesn't have hard NAT.
 
-**DERP**: The receiver connects to the closet DERP relay server. Wireguard nodes
+**DERP**: The receiver connects to the closet DERP relay server. WireGuard nodes
 are exchanged through the relay.
 
 In both cases auth is handled the same way. The receiver will only accept
@@ -131,4 +131,4 @@ way more functionality.
 
 1. [Tailscale](https://tailscale.com)
 1. [Headscale](https://github.com/juanfont/headscale)
-1. [Wireguard-go](https://github.com/WireGuard/wireguard-go)
+1. [WireGuard-go](https://github.com/WireGuard/wireguard-go)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -eu
 
 GITHUB_REPO="coder/wush"
 BINARY_NAME="wush"
