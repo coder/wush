@@ -247,7 +247,6 @@ func (s *Send) newHelloPacket() []byte {
 		panic("marshal node: " + err.Error())
 	}
 
-	fmt.Println("sending", string(raw))
 	sealed := s.Auth.OverlayPrivateKey.SealTo(s.Auth.ReceiverPublicKey, raw)
 	return sealed
 }
