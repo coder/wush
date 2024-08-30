@@ -8,7 +8,7 @@ replace github.com/gliderlabs/ssh => github.com/coder/ssh v0.0.0-20231128192721-
 
 require (
 	cdr.dev/slog v1.6.2-0.20240126064726-20367d4aede6
-	github.com/btcsuite/btcd/btcutil v1.1.5
+	github.com/btcsuite/btcd/btcutil v1.1.6
 	github.com/charmbracelet/huh v0.5.3
 	github.com/coder/coder/v2 v2.14.1
 	github.com/coder/pretty v0.0.0-20230908205945-e89ba86370e0
