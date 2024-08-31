@@ -20,7 +20,7 @@ shells over a peer-to-peer WireGuard connection. It's similar to
 ## Install
 
 ```bash
-curl -fsSL https://wush.dev/install.sh | sh
+curl -fsSL https://wush.dev/install.sh | bash
 ```
 
 For a manual installation, see the [latest release](https://github.com/coder/wush/releases/latest).
