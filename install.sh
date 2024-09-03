@@ -56,18 +56,21 @@ detect_platform() {
 select_archive_format() {
   PLATFORM_ARCH=$1
 
-  if [ "$PLATFORM_ARCH" = windows-* ]; then
-    echo "zip"
-  else
-    if command -v tar >/dev/null 2>&1; then
-      echo "tar.gz"
-    elif command -v unzip >/dev/null 2>&1; then
+  case "$PLATFORM_ARCH" in
+    windows-*)
       echo "zip"
-    else
-      echo "Unsupported: neither tar nor unzip are available."
-      exit 1
-    fi
-  fi
+      ;;
+    *)
+      if command -v tar >/dev/null 2>&1; then
+        echo "tar.gz"
+      elif command -v unzip >/dev/null 2>&1; then
+        echo "zip"
+      else
+        echo "Unsupported: neither tar nor unzip are available."
+        exit 1
+      fi
+      ;;
+  esac
 }
 
 main() {
@@ -119,10 +122,16 @@ main() {
     mkdir -p "$INSTALL_DIR"
     mv "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME.exe"
   else
-    sudo su <<EOF
-      [ $(uname -s) = "Linux" ] && setcap cap_net_admin=eip $BINARY_PATH
-      mv "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME"
+    # Run using sudo if not root
+    if [ "$(id -u)" -ne 0 ]; then
+      sudo sh <<EOF
+        [ "$(uname -s)" = "Linux" ] && setcap cap_net_admin=eip "$BINARY_PATH"
+        mv "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME"
 EOF
+    else
+        [ "$(uname -s)" = "Linux" ] && setcap cap_net_admin=eip "$BINARY_PATH"
+        mv "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME"
+    fi
   fi
 
   # Clean up
