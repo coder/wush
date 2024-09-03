@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 
 set -eu
 
@@ -56,7 +56,7 @@ detect_platform() {
 select_archive_format() {
   PLATFORM_ARCH=$1
 
-  if [[ "$PLATFORM_ARCH" == windows-* ]]; then
+  if [ "$PLATFORM_ARCH" = windows-* ]; then
     echo "zip"
   else
     if command -v tar >/dev/null 2>&1; then
@@ -98,9 +98,9 @@ main() {
 
   # Extract the archive
   echo "Extracting $BINARY_NAME..."
-  if [ "$FILE_EXT" == "zip" ]; then
+  if [ "$FILE_EXT" = "zip" ]; then
     unzip -d "$TMP_DIR" "$ARCHIVE_PATH"
-  elif [ "$FILE_EXT" == "tar.gz" ]; then
+  elif [ "$FILE_EXT" = "tar.gz" ]; then
     tar -xzf "$ARCHIVE_PATH" -C "$TMP_DIR"
   else
     echo "Unsupported file extension: $FILE_EXT"
@@ -120,7 +120,7 @@ main() {
     mv "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME.exe"
   else
     sudo su <<EOF
-      [[ $(uname -s) == "Linux" ]] && setcap cap_net_admin=eip $BINARY_PATH
+      [ $(uname -s) = "Linux" ] && setcap cap_net_admin=eip $BINARY_PATH
       mv "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME"
 EOF
   fi
