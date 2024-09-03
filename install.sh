@@ -125,11 +125,11 @@ main() {
     # Run using sudo if not root
     if [ "$(id -u)" -ne 0 ]; then
       sudo sh <<EOF
-        [ "$(uname -s)" = "Linux" ] && setcap cap_net_admin=eip "$BINARY_PATH"
+        [ "$(uname -s)" = "Linux" ] && command -v setcap >/dev/null 2>&1 && setcap cap_net_admin=eip "$BINARY_PATH"
         mv "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME"
 EOF
     else
-        [ "$(uname -s)" = "Linux" ] && setcap cap_net_admin=eip "$BINARY_PATH"
+        [ "$(uname -s)" = "Linux" ] && command -v setcap >/dev/null 2>&1 && setcap cap_net_admin=eip "$BINARY_PATH"
         mv "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME"
     fi
   fi
