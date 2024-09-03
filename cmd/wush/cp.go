@@ -10,6 +10,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/coder/serpent"
@@ -54,7 +55,7 @@ func initAuth(authFlag *string, ca *overlay.ClientAuth) serpent.MiddlewareFunc {
 				}
 			}
 
-			err := ca.Parse(*authFlag)
+			err := ca.Parse(strings.TrimSpace(*authFlag))
 			if err != nil {
 				return fmt.Errorf("parse auth key: %w", err)
 			}
