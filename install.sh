@@ -125,11 +125,23 @@ main() {
     # Run using sudo if not root
     if [ "$(id -u)" -ne 0 ]; then
       sudo sh <<EOF
-        [ "$(uname -s)" = "Linux" ] && command -v setcap >/dev/null 2>&1 && setcap cap_net_admin=eip "$BINARY_PATH"
+        if [ "$(uname -s)" = "Linux" ]; then
+          if command -v setcap >/dev/null 2>&1; then
+            setcap cap_net_admin=eip "$BINARY_PATH"
+          else
+            echo "Warning: 'setcap' command is not available. Transfer speeds may be slower."
+          fi
+        fi
         mv "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME"
 EOF
     else
-        [ "$(uname -s)" = "Linux" ] && command -v setcap >/dev/null 2>&1 && setcap cap_net_admin=eip "$BINARY_PATH"
+        if [ "$(uname -s)" = "Linux" ]; then
+          if command -v setcap >/dev/null 2>&1; then
+            setcap cap_net_admin=eip "$BINARY_PATH"
+          else
+            echo "Warning: 'setcap' command is not available. Transfer speeds may be slower."
+          fi
+        fi
         mv "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME"
     fi
   fi
