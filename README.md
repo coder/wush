@@ -19,7 +19,7 @@ shells over a peer-to-peer WireGuard connection. It's similar to
 
 ## Install
 
-Using automated shell script
+Using install script
 ```bash
 curl -fsSL https://wush.dev/install.sh | sh
 ```
