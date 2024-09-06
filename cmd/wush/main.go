@@ -51,6 +51,7 @@ func main() {
 			serveCmd(),
 			rsyncCmd(),
 			cpCmd(),
+			portForwardCmd(),
 		},
 		Options: []serpent.Option{
 			{

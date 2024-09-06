@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -142,6 +146,23 @@ func serveCmd() *serpent.Command {
 				fmt.Println(cliui.Timestamp(time.Now()), "File transfer server "+pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
 			}
 
+			if xslices.Contains(enabled, "port-forward") && !xslices.Contains(disabled, "port-forward") {
+				ts.RegisterFallbackTCPHandler(func(src, dst netip.AddrPort) (handler func(net.Conn), intercept bool) {
+					return func(src net.Conn) {
+						dst, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", dst.Port()))
+						if err != nil {
+							fmt.Println("failed to dial forwarded connection:", err.Error())
+							src.Close()
+							return
+						}
+
+						bicopy(ctx, src, dst)
+					}, true
+				})
+			} else {
+				fmt.Println(cliui.Timestamp(time.Now()), "Port-forward server "+pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
+			}
+
 			ctx, ctxCancel := inv.SignalNotifyContext(ctx, os.Interrupt)
 			defer ctxCancel()
 
@@ -168,14 +189,14 @@ func serveCmd() *serpent.Command {
 			{
 				Flag:        "enable",
 				Description: "Server options to enable.",
-				Default:     "ssh,cp",
-				Value:       serpent.EnumArrayOf(&enabled, "ssh", "cp"),
+				Default:     "ssh,cp,port-forward",
+				Value:       serpent.EnumArrayOf(&enabled, "ssh", "cp", "port-forward"),
 			},
 			{
 				Flag:        "disable",
 				Description: "Server options to disable.",
 				Default:     "",
-				Value:       serpent.EnumArrayOf(&disabled, "ssh", "cp"),
+				Value:       serpent.EnumArrayOf(&disabled, "ssh", "cp", "port-forward"),
 			},
 		},
 	}
@@ -205,6 +226,43 @@ func newTSNet(direction string) (*tsnet.Server, error) {
 	}
 
 	return srv, nil
+}
+
+func bicopy(ctx context.Context, c1, c2 io.ReadWriteCloser) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	defer func() {
+		_ = c1.Close()
+		_ = c2.Close()
+	}()
+
+	var wg sync.WaitGroup
+	copyFunc := func(dst io.WriteCloser, src io.Reader) {
+		defer func() {
+			wg.Done()
+			// If one side of the copy fails, ensure the other one exits as
+			// well.
+			cancel()
+		}()
+		_, _ = io.Copy(dst, src)
+	}
+
+	wg.Add(2)
+	go copyFunc(c1, c2)
+	go copyFunc(c2, c1)
+
+	// Convert waitgroup to a channel so we can also wait on the context.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		wg.Wait()
+	}()
+
+	select {
+	case <-ctx.Done():
+	case <-done:
+	}
 }
 
 func cpHandler(w http.ResponseWriter, r *http.Request) {
