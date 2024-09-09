@@ -28,7 +28,7 @@ require (
 	golang.org/x/crypto v0.26.0
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948
 	golang.org/x/net v0.28.0
-	golang.org/x/sys v0.24.0
+	golang.org/x/sys v0.25.0
 	golang.org/x/term v0.23.0
 	golang.org/x/xerrors v0.0.0-20240716161551-93cc26a95ae9
 	tailscale.com v1.70.0
