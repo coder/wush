@@ -19,7 +19,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1
 	github.com/muesli/termenv v0.15.3-0.20240618155329-98d742f6907a
 	github.com/pion/stun/v3 v3.0.0
-	github.com/prometheus/client_golang v1.20.2
+	github.com/prometheus/client_golang v1.20.3
 	github.com/puzpuzpuz/xsync/v3 v3.4.0
 	github.com/schollz/progressbar/v3 v3.14.6
 	github.com/spf13/afero v1.11.0
