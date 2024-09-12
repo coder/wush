@@ -11,6 +11,9 @@ builds:
     goos:
       - freebsd
       - openbsd
+      # netbsd and dragonfly do not currently build due to wireguard-go.
+      # - netbsd
+      # - dragonfly
       - windows
       - linux
       - darwin
