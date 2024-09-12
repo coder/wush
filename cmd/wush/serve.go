@@ -169,6 +169,7 @@ func serveCmd() *serpent.Command {
 						bicopy(ctx, src, dst)
 					}, true
 				})
+				hlog("Port-forward server " + pretty.Sprint(cliui.DefaultStyles.Enabled, "enabled"))
 			} else {
 				hlog("Port-forward server " + pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
 			}
