@@ -23,23 +23,28 @@ import (
 	"tailscale.com/tailcfg"
 	"tailscale.com/types/key"
 
+	"github.com/coder/pretty"
 	"github.com/coder/wush/cliui"
 )
 
-func NewReceiveOverlay(logger *slog.Logger, dm *tailcfg.DERPMap) *Receive {
+type Logf func(format string, args ...any)
+
+func NewReceiveOverlay(logger *slog.Logger, hlog Logf, dm *tailcfg.DERPMap) *Receive {
 	return &Receive{
-		Logger:   logger,
-		DerpMap:  dm,
-		SelfPriv: key.NewNode(),
-		PeerPriv: key.NewNode(),
-		in:       make(chan *tailcfg.Node, 8),
-		out:      make(chan *tailcfg.Node, 8),
+		Logger:    logger,
+		HumanLogf: hlog,
+		DerpMap:   dm,
+		SelfPriv:  key.NewNode(),
+		PeerPriv:  key.NewNode(),
+		in:        make(chan *tailcfg.Node, 8),
+		out:       make(chan *tailcfg.Node, 8),
 	}
 }
 
 type Receive struct {
-	Logger  *slog.Logger
-	DerpMap *tailcfg.DERPMap
+	Logger    *slog.Logger
+	HumanLogf Logf
+	DerpMap   *tailcfg.DERPMap
 	// SelfPriv is the private key that peers will encrypt overlay messages to.
 	// The public key of this is sent in the auth key.
 	SelfPriv key.NodePrivate
@@ -83,10 +88,10 @@ func (r *Receive) PickDERPHome(ctx context.Context) error {
 	}
 
 	if report.PreferredDERP == 0 {
-		fmt.Println("Failed to determine overlay DERP region, defaulting to", cliui.Code("NYC"), ".")
+		r.HumanLogf("Failed to determine overlay DERP region, defaulting to %s.", cliui.Code("NYC"))
 		r.derpRegionID = 1
 	} else {
-		fmt.Println("Picked DERP region", cliui.Code(r.DerpMap.Regions[report.PreferredDERP].RegionName), "as overlay home")
+		r.HumanLogf("Picked DERP region %s as overlay home", cliui.Code(r.DerpMap.Regions[report.PreferredDERP].RegionName))
 		r.derpRegionID = uint16(report.PreferredDERP)
 	}
 
@@ -139,7 +144,7 @@ func (r *Receive) ListenOverlaySTUN(ctx context.Context) (<-chan struct{}, error
 			case <-restun.C:
 				_, err = conn.WriteToUDP(m.Raw, srvAddr)
 				if err != nil {
-					fmt.Println(cliui.Timestamp(time.Now()), "Failed to write STUN request on overlay:", err)
+					r.HumanLogf("%s Failed to write STUN request on overlay: %s", cliui.Timestamp(time.Now()), err)
 				}
 				restun.Reset(30 * time.Second)
 			}
@@ -169,7 +174,7 @@ func (r *Receive) ListenOverlaySTUN(ctx context.Context) (<-chan struct{}, error
 				peers.Range(func(_ key.NodePublic, addr netip.AddrPort) bool {
 					_, err := conn.WriteToUDPAddrPort(sealed, addr)
 					if err != nil {
-						fmt.Println("send response over udp:", err)
+						r.HumanLogf("%s Failed to send updated node over udp: %s", cliui.Timestamp(time.Now()), err)
 						return false
 					}
 					return true
@@ -216,14 +221,11 @@ func (r *Receive) ListenOverlaySTUN(ctx context.Context) (<-chan struct{}, error
 
 				// our first STUN response
 				if !r.stunIP.IsValid() {
-					fmt.Println(cliui.Timestamp(time.Now()), "STUN address is", cliui.Code(stunAddrPort.String()))
+					r.HumanLogf("STUN address is %s", cliui.Code(stunAddrPort.String()))
 				}
 
 				if r.stunIP.IsValid() && r.stunIP.Compare(stunAddrPort) != 0 {
-					r.Logger.Warn("STUN address changed, this may cause issues",
-						"old_ip", r.stunIP.String(),
-						"new_ip", stunAddrPort.String(),
-					)
+					r.HumanLogf(pretty.Sprintf(cliui.DefaultStyles.Warn, "STUN address changed, this may cause issues; %s->%s", r.stunIP.String(), stunAddrPort.String()))
 				}
 				r.stunIP = stunAddrPort
 				closeIPChanOnce.Do(func() {
@@ -234,7 +236,7 @@ func (r *Receive) ListenOverlaySTUN(ctx context.Context) (<-chan struct{}, error
 
 			res, key, err := r.handleNextMessage(buf, "STUN")
 			if err != nil {
-				fmt.Println(cliui.Timestamp(time.Now()), "Failed to handle overlay message:", err.Error())
+				r.HumanLogf("Failed to handle overlay message: %s", err.Error())
 				continue
 			}
 
@@ -243,7 +245,7 @@ func (r *Receive) ListenOverlaySTUN(ctx context.Context) (<-chan struct{}, error
 			if res != nil {
 				_, err = conn.WriteToUDPAddrPort(res, addr)
 				if err != nil {
-					fmt.Println(cliui.Timestamp(time.Now()), "Failed to send overlay response over STUN:", err.Error())
+					r.HumanLogf("Failed to send overlay response over STUN: %s", err.Error())
 					return
 				}
 			}
@@ -285,7 +287,7 @@ func (r *Receive) ListenOverlayDERP(ctx context.Context) error {
 				peers.Range(func(_, derpKey key.NodePublic) bool {
 					err = c.Send(derpKey, sealed)
 					if err != nil {
-						fmt.Println("send response over derp:", err)
+						r.HumanLogf("Send updated node over DERP: %s", err)
 						return false
 					}
 					return true
@@ -304,7 +306,7 @@ func (r *Receive) ListenOverlayDERP(ctx context.Context) error {
 		case derp.ReceivedPacket:
 			res, key, err := r.handleNextMessage(msg.Data, "DERP")
 			if err != nil {
-				fmt.Println(cliui.Timestamp(time.Now()), "Failed to handle overlay message:", err.Error())
+				r.HumanLogf("Failed to handle overlay message: %s", err.Error())
 				continue
 			}
 
@@ -313,7 +315,7 @@ func (r *Receive) ListenOverlayDERP(ctx context.Context) error {
 			if res != nil {
 				err = c.Send(msg.Source, res)
 				if err != nil {
-					fmt.Println(cliui.Timestamp(time.Now()), "Failed to send overlay response over derp:", err.Error())
+					r.HumanLogf("Failed to send overlay response over derp: %s", err.Error())
 					return err
 				}
 			}
@@ -350,9 +352,9 @@ func (r *Receive) handleNextMessage(msg []byte, system string) (resRaw []byte, n
 		if h := ovMsg.HostInfo.Hostname; h != "" {
 			hostname = h
 		}
-		fmt.Println(cliui.Timestamp(time.Now()), "Received connection request over", system, "from", cliui.Keyword(fmt.Sprintf("%s@%s", username, hostname)))
+		r.HumanLogf("%s Received connection request over %s from %s", cliui.Timestamp(time.Now()), system, cliui.Keyword(fmt.Sprintf("%s@%s", username, hostname)))
 	case messageTypeNodeUpdate:
-		fmt.Println(cliui.Timestamp(time.Now()), "Received updated node from", cliui.Code(ovMsg.Node.Key.String()))
+		r.HumanLogf("%s Received updated node from %s", cliui.Timestamp(time.Now()), cliui.Code(ovMsg.Node.Key.String()))
 		r.in <- &ovMsg.Node
 		res.Typ = messageTypeNodeUpdate
 		if lastNode := r.lastNode.Load(); lastNode != nil {

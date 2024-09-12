@@ -11,8 +11,8 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 
+	"github.com/mattn/go-isatty"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/afero"
@@ -51,11 +51,14 @@ func serveCmd() *serpent.Command {
 				logSink = inv.Stderr
 			}
 			logger := slog.New(slog.NewTextHandler(logSink, nil))
+			hlog := func(format string, args ...any) {
+				fmt.Fprintf(inv.Stderr, format+"\n", args...)
+			}
 			dm, err := tsserver.DERPMapTailscale(ctx)
 			if err != nil {
 				return err
 			}
-			r := overlay.NewReceiveOverlay(logger, dm)
+			r := overlay.NewReceiveOverlay(logger, hlog, dm)
 
 			switch overlayType {
 			case "derp":
@@ -76,9 +79,15 @@ func serveCmd() *serpent.Command {
 				return fmt.Errorf("unknown overlay type: %s", overlayType)
 			}
 
-			fmt.Println("Your auth key is:")
-			fmt.Println("\t>", cliui.Code(r.ClientAuth().AuthKey()))
-			fmt.Println("Use this key to authenticate other", cliui.Code("wush"), "commands to this instance.")
+			// Ensure we always print the auth key on stdout
+			if isatty.IsTerminal(os.Stdout.Fd()) {
+				hlog("Your auth key is:")
+				fmt.Println("\t>", cliui.Code(r.ClientAuth().AuthKey()))
+				hlog("Use this key to authenticate other " + cliui.Code("wush") + " commands to this instance.")
+			} else {
+				fmt.Println(cliui.Code(r.ClientAuth().AuthKey()))
+				hlog("The auth key has been printed to stdout")
+			}
 
 			s, err := tsserver.NewServer(ctx, logger, r)
 			if err != nil {
@@ -95,7 +104,7 @@ func serveCmd() *serpent.Command {
 			ts.Up(ctx)
 			fs := afero.NewOsFs()
 
-			fmt.Println(cliui.Timestamp(time.Now()), "WireGuard is ready")
+			hlog("WireGuard is ready")
 
 			closers := []io.Closer{}
 
@@ -117,15 +126,16 @@ func serveCmd() *serpent.Command {
 				}
 				closers = append(closers, sshListener)
 
-				fmt.Println(cliui.Timestamp(time.Now()), "SSH server "+pretty.Sprint(cliui.DefaultStyles.Enabled, "enabled"))
+				// TODO: replace these logs with all of the options in the beginning.
+				hlog("SSH server " + pretty.Sprint(cliui.DefaultStyles.Enabled, "enabled"))
 				go func() {
 					err := sshSrv.Serve(sshListener)
 					if err != nil {
-						fmt.Println(cliui.Timestamp(time.Now()), "SSH server exited: "+err.Error())
+						hlog("SSH server exited: " + err.Error())
 					}
 				}()
 			} else {
-				fmt.Println(cliui.Timestamp(time.Now()), "SSH server "+pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
+				hlog("SSH server " + pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
 			}
 
 			if xslices.Contains(enabled, "cp") && !xslices.Contains(disabled, "cp") {
@@ -135,15 +145,15 @@ func serveCmd() *serpent.Command {
 				}
 				closers = append([]io.Closer{cpListener}, closers...)
 
-				fmt.Println(cliui.Timestamp(time.Now()), "File transfer server "+pretty.Sprint(cliui.DefaultStyles.Enabled, "enabled"))
+				hlog("File transfer server " + pretty.Sprint(cliui.DefaultStyles.Enabled, "enabled"))
 				go func() {
 					err := http.Serve(cpListener, http.HandlerFunc(cpHandler))
 					if err != nil {
-						fmt.Println(cliui.Timestamp(time.Now()), "File transfer server exited: "+err.Error())
+						hlog("File transfer server exited: " + err.Error())
 					}
 				}()
 			} else {
-				fmt.Println(cliui.Timestamp(time.Now()), "File transfer server "+pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
+				hlog("File transfer server " + pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
 			}
 
 			if xslices.Contains(enabled, "port-forward") && !xslices.Contains(disabled, "port-forward") {
@@ -151,7 +161,7 @@ func serveCmd() *serpent.Command {
 					return func(src net.Conn) {
 						dst, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", dst.Port()))
 						if err != nil {
-							fmt.Println("failed to dial forwarded connection:", err.Error())
+							hlog(pretty.Sprint(cliui.DefaultStyles.Warn, "Failed to dial forwarded connection:", err.Error()))
 							src.Close()
 							return
 						}
@@ -160,7 +170,7 @@ func serveCmd() *serpent.Command {
 					}, true
 				})
 			} else {
-				fmt.Println(cliui.Timestamp(time.Now()), "Port-forward server "+pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
+				hlog("Port-forward server " + pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
 			}
 
 			ctx, ctxCancel := inv.SignalNotifyContext(ctx, os.Interrupt)
