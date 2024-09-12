@@ -10,6 +10,10 @@ builds:
       - "-s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.commitDate={{.CommitTimestamp}}"
     goos:
       - freebsd
+      - openbsd
+      # netbsd and dragonfly do not currently build due to wireguard-go.
+      # - netbsd
+      # - dragonfly
       - windows
       - linux
       - darwin
@@ -41,10 +45,13 @@ nfpms:
       - apk
       - deb
 archives:
-  - id: "zip"
-    format: zip
-  - id: "tarball"
+  - id: "tar_or_zip"
     format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+      - goos: darwin
+        format: zip
 checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
   algorithm: sha256
