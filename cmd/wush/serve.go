@@ -38,7 +38,16 @@ func serveCmd() *serpent.Command {
 		verbose     bool
 		enabled     = []string{}
 		disabled    = []string{}
+		quiet       bool
 	)
+
+	// New function to handle conditional printing
+	print := func(a ...any) {
+		if !quiet {
+			fmt.Println(a...)
+		}
+	}
+
 	return &serpent.Command{
 		Use:     "serve",
 		Aliases: []string{"host"},
@@ -76,9 +85,15 @@ func serveCmd() *serpent.Command {
 				return fmt.Errorf("unknown overlay type: %s", overlayType)
 			}
 
-			fmt.Println("Your auth key is:")
-			fmt.Println("\t>", cliui.Code(r.ClientAuth().AuthKey()))
-			fmt.Println("Use this key to authenticate other", cliui.Code("wush"), "commands to this instance.")
+			if quiet {
+				// Print only the auth key
+				fmt.Println(r.ClientAuth().AuthKey())
+			} else {
+				// Print the regular output only if not in quiet mode
+				print("Your auth key is:")
+				print("\t>", cliui.Code(r.ClientAuth().AuthKey()))
+				print("Use this key to authenticate other", cliui.Code("wush"), "commands to this instance.")
+			}
 
 			s, err := tsserver.NewServer(ctx, logger, r)
 			if err != nil {
@@ -95,7 +110,7 @@ func serveCmd() *serpent.Command {
 			ts.Up(ctx)
 			fs := afero.NewOsFs()
 
-			fmt.Println(cliui.Timestamp(time.Now()), "WireGuard is ready")
+			print(cliui.Timestamp(time.Now()), "WireGuard is ready")
 
 			closers := []io.Closer{}
 
@@ -117,15 +132,15 @@ func serveCmd() *serpent.Command {
 				}
 				closers = append(closers, sshListener)
 
-				fmt.Println(cliui.Timestamp(time.Now()), "SSH server "+pretty.Sprint(cliui.DefaultStyles.Enabled, "enabled"))
+				print(cliui.Timestamp(time.Now()), "SSH server "+pretty.Sprint(cliui.DefaultStyles.Enabled, "enabled"))
 				go func() {
 					err := sshSrv.Serve(sshListener)
 					if err != nil {
-						fmt.Println(cliui.Timestamp(time.Now()), "SSH server exited: "+err.Error())
+						print(cliui.Timestamp(time.Now()), "SSH server exited: "+err.Error())
 					}
 				}()
 			} else {
-				fmt.Println(cliui.Timestamp(time.Now()), "SSH server "+pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
+				print(cliui.Timestamp(time.Now()), "SSH server "+pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
 			}
 
 			if xslices.Contains(enabled, "cp") && !xslices.Contains(disabled, "cp") {
@@ -135,15 +150,17 @@ func serveCmd() *serpent.Command {
 				}
 				closers = append([]io.Closer{cpListener}, closers...)
 
-				fmt.Println(cliui.Timestamp(time.Now()), "File transfer server "+pretty.Sprint(cliui.DefaultStyles.Enabled, "enabled"))
+				print(cliui.Timestamp(time.Now()), "File transfer server "+pretty.Sprint(cliui.DefaultStyles.Enabled, "enabled"))
 				go func() {
-					err := http.Serve(cpListener, http.HandlerFunc(cpHandler))
+					err := http.Serve(cpListener, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						cpHandler(w, r, quiet)
+					}))
 					if err != nil {
-						fmt.Println(cliui.Timestamp(time.Now()), "File transfer server exited: "+err.Error())
+						print(cliui.Timestamp(time.Now()), "File transfer server exited: "+err.Error())
 					}
 				}()
 			} else {
-				fmt.Println(cliui.Timestamp(time.Now()), "File transfer server "+pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
+				print(cliui.Timestamp(time.Now()), "File transfer server "+pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
 			}
 
 			if xslices.Contains(enabled, "port-forward") && !xslices.Contains(disabled, "port-forward") {
@@ -151,7 +168,7 @@ func serveCmd() *serpent.Command {
 					return func(src net.Conn) {
 						dst, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", dst.Port()))
 						if err != nil {
-							fmt.Println("failed to dial forwarded connection:", err.Error())
+							print("failed to dial forwarded connection:", err.Error())
 							src.Close()
 							return
 						}
@@ -160,7 +177,7 @@ func serveCmd() *serpent.Command {
 					}, true
 				})
 			} else {
-				fmt.Println(cliui.Timestamp(time.Now()), "Port-forward server "+pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
+				print(cliui.Timestamp(time.Now()), "Port-forward server "+pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
 			}
 
 			ctx, ctxCancel := inv.SignalNotifyContext(ctx, os.Interrupt)
@@ -197,6 +214,13 @@ func serveCmd() *serpent.Command {
 				Description: "Server options to disable.",
 				Default:     "",
 				Value:       serpent.EnumArrayOf(&disabled, "ssh", "cp", "port-forward"),
+			},
+			{
+				Flag:          "quiet",
+				FlagShorthand: "q",
+				Description:   "Disables all logging except for the auth key.",
+				Default:       "false",
+				Value:         serpent.BoolOf(&quiet),
 			},
 		},
 	}
@@ -265,7 +289,7 @@ func bicopy(ctx context.Context, c1, c2 io.ReadWriteCloser) {
 	}
 }
 
-func cpHandler(w http.ResponseWriter, r *http.Request) {
+func cpHandler(w http.ResponseWriter, r *http.Request, quiet bool) {
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
@@ -281,19 +305,31 @@ func cpHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bar := progressbar.DefaultBytes(
-		r.ContentLength,
-		fmt.Sprintf("Downloading %q", fiName),
-	)
-	_, err = io.Copy(io.MultiWriter(fi, bar), r.Body)
+	var writer io.Writer = fi
+	var bar *progressbar.ProgressBar
+
+	if !quiet {
+		bar = progressbar.DefaultBytes(
+			r.ContentLength,
+			fmt.Sprintf("Downloading %q", fiName),
+		)
+		writer = io.MultiWriter(fi, bar)
+	}
+
+	_, err = io.Copy(writer, r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	fi.Close()
-	bar.Close()
+	if bar != nil {
+		bar.Close()
+	}
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(fmt.Sprintf("File %q written", fiName)))
-	fmt.Printf("Received file %s from %s\n", fiName, r.RemoteAddr)
+
+	if !quiet {
+		fmt.Println("Received file", fiName, "from", r.RemoteAddr)
+	}
 }
