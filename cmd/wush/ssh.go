@@ -33,7 +33,7 @@ func sshCmd() *serpent.Command {
 		Aliases: []string{},
 		Short:   "Open a shell.",
 		Long: "Opens an SSH connection to a " + cliui.Code("wush") + " peer. " +
-			"Use " + cliui.Code("wush receive") + " on the computer you would like to connect to.",
+			"Use " + cliui.Code("wush serve") + " on the computer you would like to connect to.",
 		Middleware: serpent.Chain(
 			initLogger(&verbose, &quiet, logger, &logf),
 			initAuth(&overlayOpts.authKey, &overlayOpts.clientAuth),
@@ -91,7 +91,7 @@ func sshCmd() *serpent.Command {
 			{
 				Flag:        "auth-key",
 				Env:         "WUSH_AUTH_KEY",
-				Description: "The auth key returned by " + cliui.Code("wush receive") + ". If not provided, it will be asked for on startup.",
+				Description: "The auth key returned by " + cliui.Code("wush serve") + ". If not provided, it will be asked for on startup.",
 				Default:     "",
 				Value:       serpent.StringOf(&overlayOpts.authKey),
 			},

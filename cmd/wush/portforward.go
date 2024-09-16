@@ -175,7 +175,7 @@ func portForwardCmd() *serpent.Command {
 			{
 				Flag:        "auth-key",
 				Env:         "WUSH_AUTH_KEY",
-				Description: "The auth key returned by " + cliui.Code("wush receive") + ". If not provided, it will be asked for on startup.",
+				Description: "The auth key returned by " + cliui.Code("wush serve") + ". If not provided, it will be asked for on startup.",
 				Default:     "",
 				Value:       serpent.StringOf(&overlayOpts.authKey),
 			},
