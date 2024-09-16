@@ -21,7 +21,7 @@ require (
 	github.com/pion/stun/v3 v3.0.0
 	github.com/prometheus/client_golang v1.20.3
 	github.com/puzpuzpuz/xsync/v3 v3.4.0
-	github.com/schollz/progressbar/v3 v3.14.6
+	github.com/schollz/progressbar/v3 v3.15.0
 	github.com/spf13/afero v1.11.0
 	github.com/valyala/fasthttp v1.55.0
 	go4.org/mem v0.0.0-20220726221520-4f986261bf13
