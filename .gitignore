@@ -1,2 +1,5 @@
 dist
 test
+
+main.wasm
+test.txt

@@ -2,7 +2,7 @@ module github.com/coder/wush
 
 go 1.22.5
 
-replace tailscale.com => github.com/coadler/tailscale v1.1.1-0.20240815205130-c39ab8bcc2a9
+replace tailscale.com => github.com/coadler/tailscale v1.1.1-0.20240926000438-059d0c1039af
 
 replace github.com/gliderlabs/ssh => github.com/coder/ssh v0.0.0-20231128192721-70855dedb788
 
