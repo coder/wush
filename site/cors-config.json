@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["https://*.wush-1n6.pages.dev", "https://dev.wush.dev", "https://wush.dev"],
+    "method": ["GET", "HEAD", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Content-Encoding"],
+    "maxAgeSeconds": 3600
+  }
+]

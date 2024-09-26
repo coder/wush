@@ -1,0 +1,7 @@
+{
+    "linter": {
+        "ignore": [
+            "wasm_exec.js"
+        ]
+    }
+}
