@@ -23,7 +23,7 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.4.0
 	github.com/schollz/progressbar/v3 v3.15.0
 	github.com/spf13/afero v1.11.0
-	github.com/valyala/fasthttp v1.55.0
+	github.com/valyala/fasthttp v1.56.0
 	go4.org/mem v0.0.0-20220726221520-4f986261bf13
 	golang.org/x/crypto v0.27.0
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948
