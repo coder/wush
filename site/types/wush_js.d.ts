@@ -4,19 +4,23 @@ declare global {
 
 	interface Wush {
 		run(callbacks: WushCallbacks): void;
-		ssh(termConfig: {
-			writeFn: (data: string) => void;
-			writeErrorFn: (err: string) => void;
-			setReadFn: (readFn: (data: string) => void) => void;
-			rows: number;
-			cols: number;
-			/** Defaults to 5 seconds */
-			timeoutSeconds?: number;
-			onConnectionProgress: (message: string) => void;
-			onConnected: () => void;
-			onDone: () => void;
-		}): WushSSHSession;
+		stop(): void;
+		ssh(termConfig: TerminalConfig): WushSSHSession;
+		share(termConfig: TerminalConfig): WushSSHSession;
 	}
+
+	type TerminalConfig = {
+		writeFn: (data: string) => void;
+		writeErrorFn: (err: string) => void;
+		setReadFn: (readFn: (data: string) => void) => void;
+		rows: number;
+		cols: number;
+		/** Defaults to 5 seconds */
+		timeoutSeconds?: number;
+		onConnectionProgress: (message: string) => void;
+		onConnected: () => void;
+		onDone: () => void;
+	};
 
 	interface WushSSHSession {
 		resize(rows: number, cols: number): boolean;

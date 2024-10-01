@@ -17,6 +17,7 @@ const WushTerminal: React.FC<WushTerminalProps> = ({ authKey }) => {
   const fitAddonRef = useRef<FitAddon>();
   const wushInitialized = useContext(WushContext);
   const sshSessionRef = useRef<WushSSHSession | null>();
+  const wushRef = useRef<Wush | null>();
 
   useEffect(() => {
     if (!wushInitialized) {
@@ -65,7 +66,8 @@ const WushTerminal: React.FC<WushTerminalProps> = ({ authKey }) => {
     resizeObserver.observe(terminalRef.current);
 
     newWush({ authKey: authKey }).then((wush) => {
-      const sshSession = wush.ssh({
+      wushRef.current = wush;
+      const sshSession = wush.share({
         writeFn(input) {
           term.write(input);
         },
@@ -77,8 +79,13 @@ const WushTerminal: React.FC<WushTerminalProps> = ({ authKey }) => {
         },
         rows: term.rows,
         cols: term.cols,
-        onConnectionProgress: (msg) => {},
-        onConnected: () => {},
+        onConnectionProgress: (msg) => {
+          term.writeln(msg);
+        },
+        onConnected: () => {
+          term.writeln("");
+          term.clear();
+        },
         onDone() {
           resizeObserver?.disconnect();
           term.dispose();
@@ -106,6 +113,10 @@ const WushTerminal: React.FC<WushTerminalProps> = ({ authKey }) => {
       if (sshSessionRef.current) {
         sshSessionRef.current.close();
         sshSessionRef.current = null;
+      }
+      if (wushRef.current) {
+        wushRef.current.stop();
+        wushRef.current = null;
       }
     };
   }, [authKey, wushInitialized]);

@@ -9,10 +9,14 @@ replace github.com/gliderlabs/ssh => github.com/coder/ssh v0.0.0-20231128192721-
 require (
 	cdr.dev/slog v1.6.2-0.20240126064726-20367d4aede6
 	github.com/btcsuite/btcd/btcutil v1.1.6
+	github.com/charmbracelet/bubbles v0.20.0
+	github.com/charmbracelet/bubbletea v1.1.0
 	github.com/charmbracelet/huh v0.6.0
+	github.com/charmbracelet/lipgloss v0.13.0
 	github.com/coder/coder/v2 v2.14.2
 	github.com/coder/pretty v0.0.0-20230908205945-e89ba86370e0
 	github.com/coder/serpent v0.8.0
+	github.com/creack/pty v1.1.21
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/klauspost/compress v1.17.10
 	github.com/mattn/go-isatty v0.0.20
@@ -72,16 +76,12 @@ require (
 	github.com/catppuccin/go v0.2.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/charmbracelet/bubbles v0.20.0 // indirect
-	github.com/charmbracelet/bubbletea v1.1.0 // indirect
-	github.com/charmbracelet/lipgloss v0.13.0 // indirect
 	github.com/charmbracelet/x/ansi v0.2.3 // indirect
 	github.com/charmbracelet/x/exp/strings v0.0.0-20240722160745-212f7b056ed0 // indirect
 	github.com/charmbracelet/x/term v0.2.0 // indirect
 	github.com/coder/terraform-provider-coder v0.23.0 // indirect
 	github.com/coreos/go-iptables v0.7.1-0.20240112124308-65c67c9f46e6 // indirect
 	github.com/coreos/go-oidc/v3 v3.11.0 // indirect
-	github.com/creack/pty v1.1.21 // indirect
 	github.com/dblohm7/wingoes v0.0.0-20240119213807-a09d6be7affa // indirect
 	github.com/digitalocean/go-smbios v0.0.0-20180907143718-390a4f403a8e // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect

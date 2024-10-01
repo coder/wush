@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"log/slog"
 	"net"
@@ -110,6 +111,30 @@ func newWush(jsConfig js.Value) map[string]any {
 			}
 
 			sess := &sshSession{
+				ts:  ts,
+				cfg: args[0],
+			}
+
+			go sess.Run()
+
+			return map[string]any{
+				"close": js.FuncOf(func(this js.Value, args []js.Value) any {
+					return sess.Close() != nil
+				}),
+				"resize": js.FuncOf(func(this js.Value, args []js.Value) any {
+					rows := args[0].Int()
+					cols := args[1].Int()
+					return sess.Resize(rows, cols) != nil
+				}),
+			}
+		}),
+		"share": js.FuncOf(func(this js.Value, args []js.Value) any {
+			if len(args) != 1 {
+				log.Printf("Usage: ssh({})")
+				return nil
+			}
+
+			sess := &shareSession{
 				ts:  ts,
 				cfg: args[0],
 			}
@@ -261,6 +286,82 @@ func (s *sshSession) Run() {
 		writeError("Wait", err)
 		return
 	}
+}
+
+type shareSession struct {
+	ts  *tsnet.Server
+	cfg js.Value
+
+	conn              net.Conn
+	pendingResizeRows int
+	pendingResizeCols int
+}
+
+func (s *shareSession) Close() error {
+	if s.conn == nil {
+		// We never had a chance to open the session, ignore the close request.
+		return nil
+	}
+	return s.conn.Close()
+}
+
+func (s *shareSession) Resize(rows, cols int) error {
+	if s.conn == nil {
+		s.pendingResizeRows = rows
+		s.pendingResizeCols = cols
+		return nil
+	}
+
+	return nil
+	// return s.session.WindowChange(rows, cols)
+}
+
+func (s *shareSession) Run() {
+	writeFn := s.cfg.Get("writeFn")
+	writeErrorFn := s.cfg.Get("writeErrorFn")
+	setReadFn := s.cfg.Get("setReadFn")
+	// rows := s.cfg.Get("rows").Int()
+	// cols := s.cfg.Get("cols").Int()
+	timeoutSeconds := 5.0
+	if jsTimeoutSeconds := s.cfg.Get("timeoutSeconds"); jsTimeoutSeconds.Type() == js.TypeNumber {
+		timeoutSeconds = jsTimeoutSeconds.Float()
+	}
+	onConnectionProgress := s.cfg.Get("onConnectionProgress")
+	onConnected := s.cfg.Get("onConnected")
+	onDone := s.cfg.Get("onDone")
+	defer onDone.Invoke()
+
+	writeError := func(label string, err error) {
+		writeErrorFn.Invoke(fmt.Sprintf("%s Error: %v\r\n", label, err))
+	}
+	reportProgress := func(message string) {
+		onConnectionProgress.Invoke(message)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds*float64(time.Second)))
+	defer cancel()
+	reportProgress(fmt.Sprintf("Connecting..."))
+	c, err := s.ts.Dial(ctx, "tcp", net.JoinHostPort("100.64.0.0", "33"))
+	if err != nil {
+		writeError("Dial", err)
+		return
+	}
+	defer c.Close()
+	s.conn = c
+	reportProgress(fmt.Sprintf("Connected"))
+
+	setReadFn.Invoke(js.FuncOf(func(this js.Value, args []js.Value) any {
+		input := args[0].String()
+		_, err := c.Write([]byte(input))
+		if err != nil {
+			writeError("Write Input", err)
+		}
+		return nil
+	}))
+
+	onConnected.Invoke()
+	tw := termWriter{writeFn}
+	_, _ = io.Copy(tw, c)
 }
 
 type termWriter struct {
