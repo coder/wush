@@ -41,6 +41,7 @@ func sshCmd() *serpent.Command {
 		),
 		Handler: func(inv *serpent.Invocation) error {
 			ctx := inv.Context()
+			defer fmt.Fprintln(inv.Stderr, "[exited]")
 
 			s, err := tsserver.NewServer(ctx, logger, send)
 			if err != nil {
@@ -61,6 +62,7 @@ func sshCmd() *serpent.Command {
 			if err != nil {
 				return err
 			}
+			defer ts.Close()
 
 			logf("Bringing WireGuard up..")
 			ts.Up(ctx)

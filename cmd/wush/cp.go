@@ -143,6 +143,7 @@ func cpCmd() *serpent.Command {
 			if err != nil {
 				return err
 			}
+			defer ts.Close()
 
 			logf("Bringing WireGuard up..")
 			ts.Up(ctx)
