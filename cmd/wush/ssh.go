@@ -57,12 +57,10 @@ func sshCmd() *serpent.Command {
 
 			go s.ListenAndServe(ctx)
 			netns.SetDialerOverride(s.Dialer())
-			ts, err := newTSNet("send")
+			ts, err := newTSNet("send", verbose)
 			if err != nil {
 				return err
 			}
-			ts.Logf = func(string, ...any) {}
-			ts.UserLogf = func(string, ...any) {}
 
 			logf("Bringing WireGuard up..")
 			ts.Up(ctx)

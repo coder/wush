@@ -96,7 +96,7 @@ func serveCmd() *serpent.Command {
 
 			go s.ListenAndServe(ctx)
 			netns.SetDialerOverride(s.Dialer())
-			ts, err := newTSNet("receive")
+			ts, err := newTSNet("receive", verbose)
 			if err != nil {
 				return err
 			}
@@ -213,7 +213,7 @@ func serveCmd() *serpent.Command {
 	}
 }
 
-func newTSNet(direction string) (*tsnet.Server, error) {
+func newTSNet(direction string, verbose bool) (*tsnet.Server, error) {
 	var err error
 	tmp := os.TempDir()
 	srv := new(tsnet.Server)
@@ -223,13 +223,14 @@ func newTSNet(direction string) (*tsnet.Server, error) {
 	srv.AuthKey = direction
 	srv.ControlURL = "http://localhost:8080"
 	srv.Logf = func(format string, args ...any) {}
-	// srv.Logf = func(format string, args ...any) {
-	// 	fmt.Printf(format+"\n", args...)
-	// }
 	srv.UserLogf = func(format string, args ...any) {}
-	// srv.UserLogf = func(format string, args ...any) {
-	// 	fmt.Printf(format+"\n", args...)
-	// }
+	if verbose {
+		logf := func(format string, args ...any) {
+			fmt.Fprintf(os.Stderr, format+"\n", args...)
+		}
+		srv.Logf = logf
+		srv.UserLogf = logf
+	}
 
 	srv.Store, err = store.New(func(format string, args ...any) {}, "mem:wush")
 	if err != nil {
