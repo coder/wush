@@ -97,7 +97,8 @@ func portForwardCmd() *serpent.Command {
 			if err != nil {
 				return err
 			}
-			defer ts.Close()
+			ts.Logf = func(string, ...any) {}
+			ts.UserLogf = func(string, ...any) {}
 
 			logf("Bringing WireGuard up..")
 			ts.Up(ctx)

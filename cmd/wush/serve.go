@@ -100,7 +100,6 @@ func serveCmd() *serpent.Command {
 			if err != nil {
 				return err
 			}
-			defer ts.Close()
 
 			ts.Up(ctx)
 			fs := afero.NewOsFs()
