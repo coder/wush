@@ -64,12 +64,7 @@ func DERPMapTailscale(ctx context.Context) (*tailcfg.DERPMap, error) {
 	return dm, nil
 }
 
-func NewServer(ctx context.Context, logger *slog.Logger, ov overlay.Overlay) (*server, error) {
-	dm, err := DERPMapTailscale(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+func NewServer(ctx context.Context, logger *slog.Logger, ov overlay.Overlay, dm *tailcfg.DERPMap) (*server, error) {
 	s := &server{
 		logger:          logger,
 		noisePrivateKey: key.NewMachine(),

@@ -21,10 +21,13 @@ import (
 
 func sshCmd() *serpent.Command {
 	var (
-		verbose     bool
-		quiet       bool
-		logger      = new(slog.Logger)
-		logf        = func(str string, args ...any) {}
+		verbose   bool
+		quiet     bool
+		derpmapFi string
+		logger    = new(slog.Logger)
+		logf      = func(str string, args ...any) {}
+
+		dm          = new(tailcfg.DERPMap)
 		overlayOpts = new(sendOverlayOpts)
 		send        = new(overlay.Send)
 	)
@@ -37,12 +40,13 @@ func sshCmd() *serpent.Command {
 		Middleware: serpent.Chain(
 			initLogger(&verbose, &quiet, logger, &logf),
 			initAuth(&overlayOpts.authKey, &overlayOpts.clientAuth),
-			sendOverlayMW(overlayOpts, &send, logger, &logf),
+			derpMap(&derpmapFi, dm),
+			sendOverlayMW(overlayOpts, &send, logger, dm, &logf),
 		),
 		Handler: func(inv *serpent.Invocation) error {
 			ctx := inv.Context()
 
-			s, err := tsserver.NewServer(ctx, logger, send)
+			s, err := tsserver.NewServer(ctx, logger, send, dm)
 			if err != nil {
 				return err
 			}
@@ -92,6 +96,12 @@ func sshCmd() *serpent.Command {
 				Description: "The auth key returned by " + cliui.Code("wush serve") + ". If not provided, it will be asked for on startup.",
 				Default:     "",
 				Value:       serpent.StringOf(&overlayOpts.authKey),
+			},
+			{
+				Flag:        "derp-config-file",
+				Description: "File which specifies the DERP config to use. In the structure of https://pkg.go.dev/tailscale.com@v1.74.1/tailcfg#DERPMap.",
+				Default:     "",
+				Value:       serpent.StringOf(&derpmapFi),
 			},
 			{
 				Flag:    "stun-ip-override",

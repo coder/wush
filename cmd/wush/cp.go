@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -19,6 +20,7 @@ import (
 	"github.com/coder/wush/tsserver"
 	"github.com/schollz/progressbar/v3"
 	"tailscale.com/net/netns"
+	"tailscale.com/tailcfg"
 	"tailscale.com/types/ptr"
 )
 
@@ -65,13 +67,10 @@ func initAuth(authFlag *string, ca *overlay.ClientAuth) serpent.MiddlewareFunc {
 	}
 }
 
-func sendOverlayMW(opts *sendOverlayOpts, send **overlay.Send, logger *slog.Logger, logf *func(str string, args ...any)) serpent.MiddlewareFunc {
+func sendOverlayMW(opts *sendOverlayOpts, send **overlay.Send, logger *slog.Logger, dm *tailcfg.DERPMap, logf *func(str string, args ...any)) serpent.MiddlewareFunc {
 	return func(next serpent.HandlerFunc) serpent.HandlerFunc {
 		return func(i *serpent.Invocation) error {
-			dm, err := tsserver.DERPMapTailscale(i.Context())
-			if err != nil {
-				return err
-			}
+			var err error
 
 			newSend := overlay.NewSendOverlay(logger, dm)
 			newSend.Auth = opts.clientAuth
@@ -90,6 +89,30 @@ func sendOverlayMW(opts *sendOverlayOpts, send **overlay.Send, logger *slog.Logg
 	}
 }
 
+func derpMap(fi *string, dm *tailcfg.DERPMap) serpent.MiddlewareFunc {
+	return func(next serpent.HandlerFunc) serpent.HandlerFunc {
+		return func(i *serpent.Invocation) error {
+			if *fi == "" {
+				_dm, err := tsserver.DERPMapTailscale(i.Context())
+				if err != nil {
+					return fmt.Errorf("request derpmap from tailscale: %w", err)
+				}
+				*dm = *_dm
+			} else {
+				data, err := os.ReadFile(*fi)
+				if err != nil {
+					return fmt.Errorf("read derp config file: %w", err)
+				}
+				if err := json.Unmarshal(data, dm); err != nil {
+					return fmt.Errorf("unmarshal derp config: %w", err)
+				}
+			}
+
+			return next(i)
+		}
+	}
+}
+
 type sendOverlayOpts struct {
 	authKey          string
 	clientAuth       overlay.ClientAuth
@@ -99,10 +122,12 @@ type sendOverlayOpts struct {
 
 func cpCmd() *serpent.Command {
 	var (
-		verbose bool
-		logger  = new(slog.Logger)
-		logf    = func(str string, args ...any) {}
+		verbose   bool
+		derpmapFi string
+		logger    = new(slog.Logger)
+		logf      = func(str string, args ...any) {}
 
+		dm          = new(tailcfg.DERPMap)
 		overlayOpts = new(sendOverlayOpts)
 		send        = new(overlay.Send)
 	)
@@ -119,12 +144,13 @@ func cpCmd() *serpent.Command {
 			serpent.RequireNArgs(1),
 			initLogger(&verbose, ptr.To(false), logger, &logf),
 			initAuth(&overlayOpts.authKey, &overlayOpts.clientAuth),
-			sendOverlayMW(overlayOpts, &send, logger, &logf),
+			derpMap(&derpmapFi, dm),
+			sendOverlayMW(overlayOpts, &send, logger, dm, &logf),
 		),
 		Handler: func(inv *serpent.Invocation) error {
 			ctx := inv.Context()
 
-			s, err := tsserver.NewServer(ctx, logger, send)
+			s, err := tsserver.NewServer(ctx, logger, send, dm)
 			if err != nil {
 				return err
 			}
@@ -214,6 +240,12 @@ func cpCmd() *serpent.Command {
 				Description: "The auth key returned by " + cliui.Code("wush serve") + ". If not provided, it will be asked for on startup.",
 				Default:     "",
 				Value:       serpent.StringOf(&overlayOpts.authKey),
+			},
+			{
+				Flag:        "derp-config-file",
+				Description: "File which specifies the DERP config to use. In the structure of https://pkg.go.dev/tailscale.com@v1.74.1/tailcfg#DERPMap. By default, https://controlplane.tailscale.com/derpmap/default is used.",
+				Default:     "",
+				Value:       serpent.StringOf(&derpmapFi),
 			},
 			{
 				Flag:    "stun-ip-override",
