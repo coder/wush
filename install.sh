@@ -60,7 +60,7 @@ select_archive_format() {
     darwin_*)
       # Check if Homebrew is installed
       if command -v brew >/dev/null 2>&1; then
-        echo "Using Homebrew for installation."
+        >&2 echo "Using Homebrew for installation."
         brew install "$BINARY_NAME"  # Install using Homebrew
         exit 0  # Exit after installation
       else
