@@ -231,7 +231,7 @@ func newTSNet(direction string, verbose bool) (*tsnet.Server, error) {
 	srv.Hostname = "wush-" + direction
 	srv.Ephemeral = true
 	srv.AuthKey = direction
-	srv.ControlURL = "http://localhost:8080"
+	srv.ControlURL = "http://127.0.0.1:8080"
 	srv.Logf = func(format string, args ...any) {}
 	srv.UserLogf = func(format string, args ...any) {}
 	if verbose {
