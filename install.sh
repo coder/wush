@@ -57,7 +57,7 @@ select_archive_format() {
   PLATFORM_ARCH=$1
 
   case "$PLATFORM_ARCH" in
-    darwin-*)
+    darwin_*)
       # Check if Homebrew is installed
       if command -v brew >/dev/null 2>&1; then
         echo "Using Homebrew for installation."
@@ -67,7 +67,7 @@ select_archive_format() {
         echo "zip"  # We only ship .zip archives for macOS
       fi
       ;;
-    windows-*)
+    windows_*)
       echo "zip"  # We only ship .zip archives for Windows
       ;;
     *)
