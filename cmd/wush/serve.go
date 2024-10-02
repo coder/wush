@@ -20,6 +20,7 @@ import (
 	"golang.org/x/xerrors"
 	"tailscale.com/ipn/store"
 	"tailscale.com/net/netns"
+	"tailscale.com/tailcfg"
 	"tailscale.com/tsnet"
 
 	cslog "cdr.dev/slog"
@@ -38,12 +39,18 @@ func serveCmd() *serpent.Command {
 		verbose     bool
 		enabled     = []string{}
 		disabled    = []string{}
+		derpmapFi   string
+
+		dm = new(tailcfg.DERPMap)
 	)
 	return &serpent.Command{
 		Use:     "serve",
 		Aliases: []string{"host"},
 		Short:   "Run the wush server.",
 		Long:    "Runs the wush server. Allows other wush CLIs to connect to this computer.",
+		Middleware: serpent.Chain(
+			derpMap(&derpmapFi, dm),
+		),
 		Handler: func(inv *serpent.Invocation) error {
 			ctx := inv.Context()
 			var logSink io.Writer = io.Discard
@@ -54,12 +61,9 @@ func serveCmd() *serpent.Command {
 			hlog := func(format string, args ...any) {
 				fmt.Fprintf(inv.Stderr, format+"\n", args...)
 			}
-			dm, err := tsserver.DERPMapTailscale(ctx)
-			if err != nil {
-				return err
-			}
 			r := overlay.NewReceiveOverlay(logger, hlog, dm)
 
+			var err error
 			switch overlayType {
 			case "derp":
 				err = r.PickDERPHome(ctx)
@@ -89,7 +93,7 @@ func serveCmd() *serpent.Command {
 				hlog("The auth key has been printed to stdout")
 			}
 
-			s, err := tsserver.NewServer(ctx, logger, r)
+			s, err := tsserver.NewServer(ctx, logger, r, dm)
 			if err != nil {
 				return err
 			}
@@ -208,6 +212,12 @@ func serveCmd() *serpent.Command {
 				Description: "Server options to disable.",
 				Default:     "",
 				Value:       serpent.EnumArrayOf(&disabled, "ssh", "cp", "port-forward"),
+			},
+			{
+				Flag:        "derp-config-file",
+				Description: "File which specifies the DERP config to use. In the structure of https://pkg.go.dev/tailscale.com@v1.74.1/tailcfg#DERPMap.",
+				Default:     "",
+				Value:       serpent.StringOf(&derpmapFi),
 			},
 		},
 	}
