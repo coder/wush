@@ -27,7 +27,7 @@ func TailnetSSH(ctx context.Context, inv *serpent.Invocation, ts *tsnet.Server, 
 	// 	}
 	// }
 
-	sshConn, channels, requests, err := ssh.NewClientConn(conn, "localhost:22", &ssh.ClientConfig{
+	sshConn, channels, requests, err := ssh.NewClientConn(conn, "127.0.0.1:22", &ssh.ClientConfig{
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	})
 	if err != nil {
