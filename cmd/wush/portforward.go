@@ -41,8 +41,8 @@ func portForwardCmd() *serpent.Command {
 	)
 	return &serpent.Command{
 		Use:   "port-forward",
-		Short: "Transfer files.",
-		Long: "Transfer files to a " + cliui.Code("wush") + " peer.\n" + formatExamples(
+		Short: "Forward TCP or UDP ports",
+		Long: "Redirect data between local ports and ports on the remote " + cliui.Code("wush") + " peer.\n" + formatExamples(
 			example{
 				Description: "Port forward a single TCP port from 1234 in the peer to port 5678 on your local machine",
 				Command:     "wush port-forward --tcp 5678:1234",
