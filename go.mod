@@ -25,11 +25,11 @@ require (
 	github.com/spf13/afero v1.11.0
 	github.com/valyala/fasthttp v1.56.0
 	go4.org/mem v0.0.0-20220726221520-4f986261bf13
-	golang.org/x/crypto v0.27.0
+	golang.org/x/crypto v0.28.0
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948
-	golang.org/x/net v0.29.0
+	golang.org/x/net v0.30.0
 	golang.org/x/sys v0.26.0
-	golang.org/x/term v0.24.0
+	golang.org/x/term v0.25.0
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da
 	tailscale.com v1.70.0
 )
@@ -206,7 +206,7 @@ require (
 	golang.org/x/mod v0.21.0 // indirect
 	golang.org/x/oauth2 v0.23.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/text v0.18.0 // indirect
+	golang.org/x/text v0.19.0 // indirect
 	golang.org/x/time v0.6.0 // indirect
 	golang.org/x/tools v0.25.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
