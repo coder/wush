@@ -17,25 +17,25 @@ func main() {
 	var (
 		showVersion bool
 
-		fmtLong = "wush %s - peer-to-peer file transfers and shells\n"
+		fmtLong = "wush %s - WireGuard-powered peer-to-peer file transfer and shell\n"
 	)
 	cmd := &serpent.Command{
 		Use: "wush <subcommand>",
 		Long: fmt.Sprintf(fmtLong, getBuildInfo().version) + formatExamples(
 			example{
-				Description: "Start the wush server",
+				Description: "Start the wush server to accept incoming connections",
 				Command:     "wush serve",
 			},
 			example{
-				Description: "Open a shell to the wush host",
+				Description: "Open a shell to a wush server",
 				Command:     "wush ssh",
 			},
 			example{
-				Description: "Transfer files to the wush host using rsync",
+				Description: "Transfer files to a wush server with rsync",
 				Command:     "wush rsync local-file.txt :/path/to/remote/file",
 			},
 			example{
-				Description: "Copy a single file to the host",
+				Description: "Copy a single file to a wush server",
 				Command:     "wush cp local-file.txt",
 			},
 		),

@@ -24,17 +24,16 @@ func rsyncCmd() *serpent.Command {
 	)
 	return &serpent.Command{
 		Use:   "rsync [flags] -- [rsync args]",
-		Short: "Transfer files over rsync.",
-		Long: "Runs rsync to transfer files to a " + cliui.Code("wush") + " peer. " +
-			"Use " + cliui.Code("wush serve") + " on the computer you would like to connect to." +
+		Short: "Transfer files with rsync to/from a wush server.",
+		Long: "Use " + cliui.Code("wush serve") + " on the computer you would like to transfer files to." +
 			"\n\n" +
 			formatExamples(
 				example{
-					Description: "Sync a local file to the remote",
+					Description: "Upload a local file",
 					Command:     "wush rsync /local/path :/remote/path",
 				},
 				example{
-					Description: "Download a remote file to the local computer",
+					Description: "Download a remote file",
 					Command:     "wush rsync :/remote/path /local/path",
 				},
 				example{

@@ -41,26 +41,26 @@ func portForwardCmd() *serpent.Command {
 	)
 	return &serpent.Command{
 		Use:   "port-forward",
-		Short: "Forward TCP or UDP ports",
-		Long: "Redirect data between local ports and ports on the remote " + cliui.Code("wush") + " peer.\n" + formatExamples(
+		Short: "Forward ports from the wush server.",
+		Long: formatExamples(
 			example{
-				Description: "Port forward a single TCP port from 1234 in the peer to port 5678 on your local machine",
+				Description: "Forward a single TCP port from 1234 on the server to port 5678 on your local machine",
 				Command:     "wush port-forward --tcp 5678:1234",
 			},
 			example{
-				Description: "Port forward a single UDP port from port 9000 to port 9000 on your local machine",
+				Description: "Forward a single UDP port",
 				Command:     "wush port-forward --udp 9000",
 			},
 			example{
-				Description: "Port forward multiple TCP ports and a UDP port",
+				Description: "Forward multiple TCP ports and a UDP port",
 				Command:     "wush port-forward --tcp 8080:8080 --tcp 9000:3000 --udp 5353:53",
 			},
 			example{
-				Description: "Port forward multiple ports (TCP or UDP) in condensed syntax",
+				Description: "Forward multiple ports (TCP or UDP) in condensed syntax",
 				Command:     "wush port-forward --tcp 8080,9000:3000,9090-9092,10000-10002:10010-10012",
 			},
 			example{
-				Description: "Port forward specifying the local address to bind to",
+				Description: "Forward specifying the local address to bind",
 				Command:     "wush port-forward --tcp 1.2.3.4:8080:8080",
 			},
 		),

@@ -34,9 +34,8 @@ func sshCmd() *serpent.Command {
 	return &serpent.Command{
 		Use:     "ssh",
 		Aliases: []string{},
-		Short:   "Open a shell.",
-		Long: "Opens an SSH connection to a " + cliui.Code("wush") + " peer. " +
-			"Use " + cliui.Code("wush serve") + " on the computer you would like to connect to.",
+		Short:   "Open a SSH connection to a wush server.",
+		Long:    "Use " + cliui.Code("wush serve") + " on the computer you would like to connect to.",
 		Middleware: serpent.Chain(
 			initLogger(&verbose, &quiet, logger, &logf),
 			initAuth(&overlayOpts.authKey, &overlayOpts.clientAuth),

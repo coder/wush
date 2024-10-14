@@ -44,10 +44,8 @@ func serveCmd() *serpent.Command {
 		dm = new(tailcfg.DERPMap)
 	)
 	return &serpent.Command{
-		Use:     "serve",
-		Aliases: []string{"host"},
-		Short:   "Run the wush server.",
-		Long:    "Runs the wush server. Allows other wush CLIs to connect to this computer.",
+		Use:   "serve",
+		Short: "Run the wush server. Allow wush clients to connect.",
 		Middleware: serpent.Chain(
 			derpMap(&derpmapFi, dm),
 		),
