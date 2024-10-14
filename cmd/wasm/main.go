@@ -74,7 +74,7 @@ func newWush(jsConfig js.Value) map[string]any {
 		panic(err)
 	}
 
-	s, err := tsserver.NewServer(ctx, logger, send)
+	s, err := tsserver.NewServer(ctx, logger, send, dm)
 	if err != nil {
 		panic(err)
 	}
