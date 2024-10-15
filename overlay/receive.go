@@ -2,7 +2,6 @@ package overlay
 
 import (
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -60,18 +59,20 @@ type Receive struct {
 	// communication.
 	derpRegionID uint16
 
-	// nextPeerIP is a counter that assigns IP addresses to new peers in
-	// ascending order. It contains the last two bytes of an IPv4 address,
-	// 100.64.x.x.
-	nextPeerIP uint16
-
 	lastNode atomic.Pointer[tailcfg.Node]
-	in       chan *tailcfg.Node
-	out      chan *tailcfg.Node
+	// in funnels node updates from other peers to us
+	in chan *tailcfg.Node
+	// out fans out our node updates to peers
+	out chan *tailcfg.Node
 }
 
-func (r *Receive) IP() netip.Addr {
-	return netip.AddrFrom4([4]byte{100, 64, 0, 0})
+func (r *Receive) IPs() []netip.Addr {
+	i6 := [16]byte{0xfd, 0x7a, 0x11, 0x5c, 0xa1, 0xe0}
+	i6[15] = 0x01
+	return []netip.Addr{
+		// netip.AddrFrom4([4]byte{100, 64, 0, 0}),
+		netip.AddrFrom16(i6),
+	}
 }
 
 func (r *Receive) PickDERPHome(ctx context.Context) error {
@@ -306,7 +307,7 @@ func (r *Receive) ListenOverlayDERP(ctx context.Context) error {
 		case derp.ReceivedPacket:
 			res, key, err := r.handleNextMessage(msg.Data, "DERP")
 			if err != nil {
-				r.HumanLogf("Failed to handle overlay message: %s", err.Error())
+				r.HumanLogf("Failed to handle overlay message from %s: %s", msg.Source.ShortString(), err.Error())
 				continue
 			}
 
@@ -343,7 +344,6 @@ func (r *Receive) handleNextMessage(msg []byte, system string) (resRaw []byte, n
 		// do nothing
 	case messageTypeHello:
 		res.Typ = messageTypeHelloResponse
-		res.IP = r.assignNextIP()
 		username := "unknown"
 		if u := ovMsg.HostInfo.Username; u != "" {
 			username = u
@@ -351,6 +351,9 @@ func (r *Receive) handleNextMessage(msg []byte, system string) (resRaw []byte, n
 		hostname := "unknown"
 		if h := ovMsg.HostInfo.Hostname; h != "" {
 			hostname = h
+		}
+		if lastNode := r.lastNode.Load(); lastNode != nil {
+			res.Node = *lastNode
 		}
 		r.HumanLogf("%s Received connection request over %s from %s", cliui.Timestamp(time.Now()), system, cliui.Keyword(fmt.Sprintf("%s@%s", username, hostname)))
 	case messageTypeNodeUpdate:
@@ -373,13 +376,4 @@ func (r *Receive) handleNextMessage(msg []byte, system string) (resRaw []byte, n
 
 	sealed := r.SelfPriv.SealTo(r.PeerPriv.Public(), raw)
 	return sealed, ovMsg.Node.Key, nil
-}
-
-func (r *Receive) assignNextIP() netip.Addr {
-	r.nextPeerIP += 1
-
-	addrBytes := [4]byte{100, 64, 0, 0}
-	binary.BigEndian.PutUint16(addrBytes[2:], r.nextPeerIP)
-
-	return netip.AddrFrom4(addrBytes)
 }

@@ -3,20 +3,49 @@ declare global {
 	function exitWush(): void;
 
 	interface Wush {
-		run(callbacks: WushCallbacks): void;
-		ssh(termConfig: {
-			writeFn: (data: string) => void;
-			writeErrorFn: (err: string) => void;
-			setReadFn: (readFn: (data: string) => void) => void;
-			rows: number;
-			cols: number;
-			/** Defaults to 5 seconds */
-			timeoutSeconds?: number;
-			onConnectionProgress: (message: string) => void;
-			onConnected: () => void;
-			onDone: () => void;
-		}): WushSSHSession;
+		auth_info(): AuthInfo;
+		connect(authKey: string): Promise<Peer>;
+		ping(peer: Peer): Promise<number>;
+		ssh(
+			peer: Peer,
+			termConfig: {
+				writeFn: (data: string) => void;
+				writeErrorFn: (err: string) => void;
+				setReadFn: (readFn: (data: string) => void) => void;
+				rows: number;
+				cols: number;
+				/** Defaults to 5 seconds */
+				timeoutSeconds?: number;
+				onConnectionProgress: (message: string) => void;
+				onConnected: () => void;
+				onDone: () => void;
+			},
+		): WushSSHSession;
+		transfer(
+			peer: Peer,
+			filename: string,
+			sizeBytes: number,
+			data: ReadableStream<Uint8Array>,
+			helper: (
+				stream: ReadableStream<Uint8Array>,
+				goCallback: (bytes: Uint8Array | null) => Promise<void>,
+			) => Promise<void>,
+		): Promise<void>;
+		stop(): void;
 	}
+
+	type AuthInfo = {
+		derp_id: number;
+		derp_name: string;
+		auth_key: string;
+	};
+
+	type Peer = {
+		id: number;
+		name: string;
+		ip: string;
+		cancel: () => void;
+	};
 
 	interface WushSSHSession {
 		resize(rows: number, cols: number): boolean;
@@ -24,13 +53,20 @@ declare global {
 	}
 
 	type WushConfig = {
-		authKey?: string;
-	};
-
-	type WushCallbacks = {
-		notifyState: (state: WushState) => void;
-		notifyNetMap: (netMapStr: string) => void;
-		notifyPanicRecover: (err: string) => void;
+		onNewPeer: (peer: Peer) => void;
+		// TODO: figure out what needs to be sent to the FE
+		// FE returns false if denying the file
+		onIncomingFile: (
+			peer: Peer,
+			filename: string,
+			sizeBytes: number,
+		) => boolean;
+		downloadFile: (
+			peer: Peer,
+			filename: string,
+			sizeBytes: number,
+			stream: ReadableStream<Uint8Array>,
+		) => Promise<void>;
 	};
 }
 

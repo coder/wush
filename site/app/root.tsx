@@ -62,7 +62,7 @@ export function HydrateFallback() {
 }
 
 export default function App() {
-  const [wushInitialized, setWushInitialized] = useState<boolean>(false);
+  const [wushCtx, setWushCtx] = useState<Wush | null>(null);
 
   useEffect(() => {
     // Check if not running on the client-side
@@ -83,11 +83,27 @@ export default function App() {
         fetch(url),
         go.importObject
       );
+
       go.run(wasmModule.instance).then(() => {
         console.log("wasm exited");
-        setWushInitialized(false);
+        setWushCtx(null);
       });
-      setWushInitialized(true);
+
+      newWush({
+        onNewPeer: (peer: Peer) => void {},
+        onIncomingFile: (peer, filename, sizeBytes): boolean => {
+          return false;
+        },
+        downloadFile: async (
+          peer,
+          filename,
+          sizeBytes,
+          stream
+        ): Promise<void> => {},
+      }).then((wush) => {
+        console.log(wush.auth_info());
+        setWushCtx(wush);
+      });
     }
     loadWasm(go);
     return () => {
@@ -95,13 +111,13 @@ export default function App() {
       if (!go.exited) {
         exitWush();
       }
-      setWushInitialized(false);
+      setWushCtx(null);
     };
   }, []);
 
   return (
     <div className="h-screen bg-gradient-to-br from-bg via-purple/5 to-bg text-fg font-mono overflow-hidden">
-      <WushContext.Provider value={wushInitialized}>
+      <WushContext.Provider value={wushCtx}>
         <Outlet />
       </WushContext.Provider>
     </div>

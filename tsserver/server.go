@@ -243,7 +243,7 @@ func (s *server) NoiseUpgradeHandler(w http.ResponseWriter, r *http.Request) {
 		peerUpdate: s.peerMapUpdate,
 		node:       &s.node,
 		nodeUpdate: s.nodeUpdate,
-		getIP:      s.overlay.IP,
+		getIPs:     s.overlay.IPs,
 	}
 
 	noiseConn, err := controlhttp.AcceptHTTP(
@@ -328,7 +328,7 @@ type noiseServer struct {
 	machineKey     key.MachinePublic
 	nodeKey        key.NodePublic
 	derpMap        *tailcfg.DERPMap
-	getIP          func() netip.Addr
+	getIPs         func() []netip.Addr
 
 	peers      *xsync.MapOf[tailcfg.NodeID, *tailcfg.Node]
 	peerUpdate chan update
@@ -357,7 +357,7 @@ func (ns *noiseServer) NoiseRegistrationHandler(w http.ResponseWriter, r *http.R
 
 	sp := strings.SplitN(registerRequest.Auth.AuthKey, "-", 2)
 
-	ip := ns.getIP()
+	ips := ns.getIPs()
 
 	resp := tailcfg.RegisterResponse{}
 	resp.MachineAuthorized = true
@@ -377,8 +377,10 @@ func (ns *noiseServer) NoiseRegistrationHandler(w http.ResponseWriter, r *http.R
 	ns.nodeKey = registerRequest.NodeKey
 
 	nodeID := tailcfg.NodeID(rand.Int64())
-
-	addr := netip.PrefixFrom(ip, 32)
+	addrs := []netip.Prefix{}
+	for _, ip := range ips {
+		addrs = append(addrs, netip.PrefixFrom(ip, ip.BitLen()))
+	}
 
 	ns.storeNode(&tailcfg.Node{
 		ID:         nodeID,
@@ -390,8 +392,8 @@ func (ns *noiseServer) NoiseRegistrationHandler(w http.ResponseWriter, r *http.R
 		Key:        registerRequest.NodeKey,
 		LastSeen:   ptr.To(time.Now()),
 		Cap:        registerRequest.Version,
-		Addresses:  []netip.Prefix{addr},
-		AllowedIPs: []netip.Prefix{addr},
+		Addresses:  addrs,
+		AllowedIPs: addrs,
 		CapMap: tailcfg.NodeCapMap{
 			tailcfg.CapabilityDebug: []tailcfg.RawMessage{"true"},
 		},

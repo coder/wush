@@ -10,7 +10,6 @@ import (
 	"net/netip"
 	"os"
 	"os/user"
-	"sync"
 	"time"
 
 	"github.com/coder/wush/cliui"
@@ -26,7 +25,7 @@ func NewSendOverlay(logger *slog.Logger, dm *tailcfg.DERPMap) *Send {
 		derpMap: dm,
 		in:      make(chan *tailcfg.Node, 8),
 		out:     make(chan *tailcfg.Node, 8),
-		waitIP:  make(chan struct{}),
+		SelfIP:  randv6(),
 	}
 }
 
@@ -35,10 +34,7 @@ type Send struct {
 	STUNIPOverride netip.Addr
 	derpMap        *tailcfg.DERPMap
 
-	// _ip is the ip we get from the receiver, which is our ip on the tailnet.
-	_ip        netip.Addr
-	waitIP     chan struct{}
-	waitIPOnce sync.Once
+	SelfIP netip.Addr
 
 	Auth ClientAuth
 
@@ -46,9 +42,8 @@ type Send struct {
 	out chan *tailcfg.Node
 }
 
-func (s *Send) IP() netip.Addr {
-	<-s.waitIP
-	return s._ip
+func (s *Send) IPs() []netip.Addr {
+	return []netip.Addr{s.SelfIP}
 }
 
 func (s *Send) Recv() <-chan *tailcfg.Node {
@@ -131,8 +126,6 @@ func (s *Send) ListenOverlaySTUN(ctx context.Context) error {
 			s.Logger.Error("read from STUN; exiting", "err", err)
 			return err
 		}
-		_ = addr
-		fmt.Println("new UDP msg from", addr.String())
 
 		buf = buf[:n]
 
@@ -270,11 +263,7 @@ func (s *Send) handleNextMessage(msg []byte) (resRaw []byte, _ error) {
 	case messageTypePong:
 		// do nothing
 	case messageTypeHelloResponse:
-		s._ip = ovMsg.IP
-		s.waitIPOnce.Do(func() {
-			close(s.waitIP)
-		})
-		// fmt.Println("Received IP from peer:", s._ip.String())
+		s.in <- &ovMsg.Node
 	case messageTypeNodeUpdate:
 		s.in <- &ovMsg.Node
 	}
