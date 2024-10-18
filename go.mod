@@ -2,7 +2,7 @@ module github.com/coder/wush
 
 go 1.22.6
 
-replace tailscale.com => github.com/coadler/tailscale v1.1.1-0.20240926000438-059d0c1039af
+replace tailscale.com => github.com/coadler/tailscale v1.1.1-0.20241018213052-0d22086da1b2
 
 // replace tailscale.com => /home/colin/Projects/coadler/tailscale
 
@@ -34,7 +34,7 @@ require (
 	golang.org/x/sys v0.26.0
 	golang.org/x/term v0.25.0
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da
-	tailscale.com v1.70.0
+	tailscale.com v1.76.1
 )
 
 require (
