@@ -1,53 +1,27 @@
 {
   "name": "site",
   "private": true,
-  "sideEffects": false,
-  "type": "module",
   "scripts": {
-    "build": "remix vite:build",
-    "deploy": "pnpm run build && wrangler pages deploy",
-    "dev": "remix vite:dev",
-    "start": "remix-serve ./build/server/index.js",
-    "typecheck": "tsc"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
   "dependencies": {
-    "@remix-run/node": "2.12.0",
-    "@remix-run/react": "2.12.0",
-    "@remix-run/serve": "2.12.0",
-    "@xterm/addon-canvas": "0.7.0",
-    "@xterm/addon-fit": "0.10.0",
-    "@xterm/addon-webgl": "0.18.0",
+    "next": "^14.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "@xterm/xterm": "5.5.0",
-    "isbot": "4.4.0",
-    "lucide-react": "0.441.0",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "remix-utils": "7.6.0"
+    "@xterm/addon-fit": "0.10.0",
+    "@xterm/addon-canvas": "0.7.0",
+    "lucide-react": "0.441.0"
   },
   "devDependencies": {
-    "@remix-run/dev": "2.12.0",
-    "@types/golang-wasm-exec": "1.15.2",
-    "@types/react": "18.3.9",
-    "@types/react-dom": "18.3.0",
-    "autoprefixer": "10.4.20",
-    "biome": "0.3.3",
-    "postcss": "8.4.47",
-    "prettier": "3.3.3",
-    "rollup": "4.24.0",
-    "tailwind-scrollbar-hide": "1.1.7",
-    "tailwindcss": "3.4.4",
-    "tw-colors": "3.3.2",
-    "typescript": "5.1.6",
-    "vite": "5.4.8",
-    "vite-plugin-compression2": "1.3.0",
-    "vite-plugin-copy": "0.1.6",
-    "vite-plugin-static-copy": "1.0.6",
-    "vite-plugin-top-level-await": "1.4.4",
-    "vite-plugin-wasm": "3.3.0",
-    "vite-tsconfig-paths": "5.0.1",
-    "wrangler": "3.78.8"
-  },
-  "engines": {
-    "node": ">=20.0.0"
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.0.0"
   }
 }
