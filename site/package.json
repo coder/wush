@@ -17,6 +17,7 @@
     "lucide-react": "0.441.0"
   },
   "devDependencies": {
+    "@types/golang-wasm-exec": "^1.15.2",
     "@types/node": "^20.0.0",
     "@types/react": "^18.2.0",
     "autoprefixer": "^10.4.20",
