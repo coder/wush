@@ -60,7 +60,7 @@ declare global {
 			peer: Peer,
 			filename: string,
 			sizeBytes: number,
-		) => boolean;
+		) => Promise<boolean>;
 		downloadFile: (
 			peer: Peer,
 			filename: string,
