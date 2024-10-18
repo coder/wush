@@ -505,7 +505,17 @@ func cpH(onIncomingFile js.Value, downloadFile js.Value) http.HandlerFunc {
 			}),
 		}
 
-		allow := onIncomingFile.Invoke(peer, fiName, r.ContentLength).Bool()
+		var allow bool
+		onIncomingFile.Invoke(peer, fiName, r.ContentLength).
+			Call("then", js.FuncOf(func(this js.Value, args []js.Value) any {
+				allow = args[0].Bool()
+				return nil
+			})).
+			Call("catch", js.FuncOf(func(this js.Value, args []js.Value) any {
+				fmt.Println("onIncomingFile failed:", args[0].String())
+				allow = false
+				return nil
+			}))
 		if !allow {
 			w.WriteHeader(http.StatusForbidden)
 			w.Write([]byte("File transfer was denied"))
