@@ -17,7 +17,7 @@ require (
 	github.com/coder/serpent v0.8.0
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/google/uuid v1.6.0
-	github.com/klauspost/compress v1.17.10
+	github.com/klauspost/compress v1.17.11
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mitchellh/go-wordwrap v1.0.1
 	github.com/muesli/termenv v0.15.3-0.20240618155329-98d742f6907a
