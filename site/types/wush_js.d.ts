@@ -1,6 +1,5 @@
 declare global {
 	function newWush(config: WushConfig): Promise<Wush>;
-	function exitWush(): void;
 
 	interface Wush {
 		auth_info(): AuthInfo;

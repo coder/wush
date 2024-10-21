@@ -1,49 +1,58 @@
-import { useState, useContext } from "react"
-import { WushContext } from "context/wush"
-import { Copy, FileUp, Code, Star } from "lucide-react"
+import { createWush } from "context/wush";
+import { Code, Copy, FileUp, Star } from "lucide-react";
+import { useEffect, useState } from "react";
 
-type TabType = "send" | "receive" | "access"
+type TabType = "send" | "receive" | "access";
 
-const GITHUB_STAR_COUNT = "1,000";
-
-const CommandLineInstructions = ({ type }: { type: "send" | "receive" | "access" }) => (
+const CommandLineInstructions = ({
+  type,
+}: {
+  type: "send" | "receive" | "access";
+}) => (
   <div className="mt-4 p-4 bg-gray-700 rounded-md">
     <h4 className="text-sm font-semibold mb-2 flex items-center text-gray-200">
       <Code className="mr-2 h-4 w-4" />
       Command-line Instructions
     </h4>
     <pre className="text-xs overflow-x-auto text-gray-300">
-      {type === "receive" ? (
-        `# To send a file:
+      {type === "receive"
+        ? `# To send a file:
 wush send <file> <auth-key>`
-      ) : (
-        `# To start a wush server:
-wush server`
-      )}
+        : `# To start a wush server:
+wush server`}
     </pre>
   </div>
-)
+);
 
 export default function Component() {
-  const [authKey, setAuthKey] = useState("")
-  const [activeTab, setActiveTab] = useState<TabType>("send")
-  const wush = useContext(WushContext)
+  const [authKey, setAuthKey] = useState("");
+  const [activeTab, setActiveTab] = useState<TabType>("send");
+  const [wush, setWush] = useState<Wush | null>(null);
+
+  useEffect(() => {
+    const wushPromise = createWush()
+
+    wushPromise.then(setWush).catch(console.error);
+    return () => {
+      wushPromise.then((wush) => wush.stop());
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (activeTab === "send") {
       // Handle send file logic
     } else if (activeTab === "access") {
       // Handle open access logic
     }
-  }
+  };
 
-  console.log("auth key", wush, wush?.auth_info())
+  console.log("auth key", wush, wush?.auth_info());
 
   const handleCopyAuthKey = () => {
-    navigator.clipboard.writeText(wush?.auth_info().auth_key || "")
+    navigator.clipboard.writeText(wush?.auth_info().auth_key || "");
     // You might want to add a toast notification here
-  }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-black text-gray-200">
@@ -59,12 +68,12 @@ export default function Component() {
           className="flex items-center text-gray-400 hover:text-gray-200 transition-colors"
         >
           <Star className="h-5 w-5 mr-1" />
-          <span>{GITHUB_STAR_COUNT}</span>
+          <span>{process.env.GITHUB_STARS}</span>
         </a>
       </header>
 
-      <main className="flex-1 flex items-center justify-center p-8 bg-gradient-to-br from-gray-950 via-gray-900 to-black">
-        <div className="w-full max-w-md space-y-8">
+      <main className="flex-1 p-8 pt-40 bg-gradient-to-br from-gray-950 via-gray-900 to-black">
+        <div className="w-full max-w-lg mx-auto space-y-8">
           <div className="text-center space-y-4">
             <h1 className="text-4xl font-bold text-white">
               Send, Receive, Access
@@ -88,19 +97,21 @@ export default function Component() {
                   key={tab}
                   className={`flex-1 py-3 transition-all duration-300 ease-in-out ${
                     activeTab === tab
-                      ? 'text-blue-400'
-                      : 'text-gray-400 hover:text-gray-200'
+                      ? "text-blue-400"
+                      : "text-gray-400 hover:text-gray-200"
                   }`}
                   onClick={() => setActiveTab(tab as TabType)}
                 >
                   {tab.charAt(0).toUpperCase() + tab.slice(1)}
                 </button>
               ))}
-              <div 
+              <div
                 className="absolute bottom-0 left-0 h-0.5 bg-blue-400 transition-all duration-300 ease-in-out"
-                style={{ 
-                  width: '33.333%', 
-                  transform: `translateX(${["send", "receive", "access"].indexOf(activeTab) * 100}%)`
+                style={{
+                  width: "33.333%",
+                  transform: `translateX(${
+                    ["send", "receive", "access"].indexOf(activeTab) * 100
+                  }%)`,
                 }}
               />
             </div>
@@ -118,7 +129,10 @@ export default function Component() {
                     placeholder="Enter auth key"
                     className="w-full p-3 border border-gray-600 rounded bg-gray-700 text-gray-200"
                   />
-                  <button type="submit" className="w-full p-3 bg-blue-600 rounded flex items-center justify-center hover:bg-blue-700 transition-colors">
+                  <button
+                    type="submit"
+                    className="w-full p-3 bg-blue-600 rounded flex items-center justify-center hover:bg-blue-700 transition-colors"
+                  >
                     <FileUp className="mr-2 h-5 w-5" />
                     Send File
                   </button>
@@ -144,6 +158,7 @@ export default function Component() {
                     >
                       <Copy className="h-5 w-5" />
                     </button>
+                    {wush?.auth_info().derp_name}
                   </div>
                   <CommandLineInstructions type="receive" />
                 </div>
@@ -154,10 +169,8 @@ export default function Component() {
       </main>
 
       <footer className="border-t border-gray-800 p-4 mt-auto bg-gray-950">
-        <div className="text-center text-gray-500">
-          Made by Coder
-        </div>
+        <div className="text-center text-gray-500">Made by Coder</div>
       </footer>
     </div>
-  )
+  );
 }

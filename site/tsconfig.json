@@ -1,7 +1,8 @@
 {
   "include": [
     "**/*.ts",
-    "**/*.tsx"
+    "**/*.tsx",
+    ".next/types/**/*.ts"
   ],
   "compilerOptions": {
     "lib": [
@@ -31,7 +32,12 @@
       ]
     },
     "noEmit": true,
-    "incremental": true
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
   "exclude": [
     "node_modules"

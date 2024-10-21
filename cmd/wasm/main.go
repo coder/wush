@@ -46,10 +46,6 @@ func main() {
 		promiseConstructor := js.Global().Get("Promise")
 		return promiseConstructor.New(handler)
 	}))
-	js.Global().Set("exitWush", js.FuncOf(func(this js.Value, args []js.Value) any {
-		// close(ch)
-		return nil
-	}))
 
 	// Keep the main function running
 	<-make(chan struct{}, 0)
