@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -61,6 +62,23 @@ func newWush(cfg js.Value) map[string]any {
 	if err != nil {
 		panic(err)
 	}
+	// var err error
+	// dm := &tailcfg.DERPMap{
+	// 	Regions: map[int]*tailcfg.DERPRegion{
+	// 		1: {
+	// 			RegionID:   1,
+	// 			RegionCode: "east4",
+	// 			RegionName: "GCP US East 4",
+	// 			Nodes: []*tailcfg.DERPNode{{
+	// 				Name:      "1",
+	// 				RegionID:  1,
+	// 				HostName:  "derp1-east4-gcp.derp.wush.dev",
+	// 				IPv4:      "34.21.11.126",
+	// 				CanPort80: true,
+	// 			}},
+	// 		},
+	// 	},
+	// }
 
 	ov := overlay.NewWasmOverlay(log.Printf, dm, cfg.Get("onNewPeer"))
 
@@ -216,7 +234,7 @@ func newWush(cfg js.Value) map[string]any {
 
 				if len(args) != 5 {
 					errorConstructor := js.Global().Get("Error")
-					errorObject := errorConstructor.New("Usage: transfer(peer, file)")
+					errorObject := errorConstructor.New("Usage: transfer(peer, fileName, sizeBytes, stream, onProgress)")
 					reject.Invoke(errorObject)
 					return nil
 				}
@@ -224,53 +242,26 @@ func newWush(cfg js.Value) map[string]any {
 				peer := args[0]
 				ip := peer.Get("ip").String()
 				fileName := args[1].String()
-				sizeBytes := args[2].Int()
+				sizeBytes := int64(args[2].Int())
 				stream := args[3]
-				streamHelper := args[4]
-
-				pr, pw := io.Pipe()
-
-				goCallback := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-					promiseConstructor := js.Global().Get("Promise")
-					return promiseConstructor.New(js.FuncOf(func(this js.Value, promiseArgs []js.Value) any {
-						resolve := promiseArgs[0]
-						_ = promiseArgs[1]
-						go func() {
-							if len(args) == 0 || args[0].IsNull() || args[0].IsUndefined() {
-								pw.Close()
-								resolve.Invoke()
-								return
-							}
-
-							fmt.Println("in go callback")
-							// Convert the JavaScript Uint8Array to a Go byte slice
-							uint8Array := args[0]
-							fmt.Println("type is", uint8Array.Type().String())
-							length := uint8Array.Get("length").Int()
-							buf := make([]byte, length)
-							js.CopyBytesToGo(buf, uint8Array)
-
-							fmt.Println("sending data to channel")
-							// Send the data to the channel
-							if _, err := pw.Write(buf); err != nil {
-								pw.CloseWithError(err)
-							}
-							fmt.Println("callback finished")
-
-							// Resolve the promise
-							resolve.Invoke()
-						}()
-						return nil
-					}))
-				})
+				onProgress := args[4]
 
 				go func() {
-					defer goCallback.Release()
-
-					streamHelper.Invoke(stream, goCallback)
-
-					hc := ts.HTTPClient()
-					req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s:4444/%s", ip, fileName), pr)
+					startTime := time.Now()
+					reader := &jsStreamReader{
+						reader:     stream.Call("getReader"),
+						onProgress: onProgress,
+						totalSize:  sizeBytes,
+					}
+					bufferSize := 1024 * 1024
+					hc := &http.Client{
+						Transport: &http.Transport{
+							DialContext:     ts.Dial,
+							ReadBufferSize:  bufferSize,
+							WriteBufferSize: bufferSize,
+						},
+					}
+					req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s:4444/%s", ip, fileName), bufio.NewReaderSize(reader, bufferSize))
 					if err != nil {
 						errorConstructor := js.Global().Get("Error")
 						errorObject := errorConstructor.New(err.Error())
@@ -279,6 +270,7 @@ func newWush(cfg js.Value) map[string]any {
 					}
 					req.ContentLength = int64(sizeBytes)
 
+					fmt.Printf("Starting transfer of %d bytes\n", sizeBytes)
 					res, err := hc.Do(req)
 					if err != nil {
 						errorConstructor := js.Global().Get("Error")
@@ -291,7 +283,10 @@ func newWush(cfg js.Value) map[string]any {
 					bod := bytes.NewBuffer(nil)
 					_, _ = io.Copy(bod, res.Body)
 
-					fmt.Println(bod.String())
+					duration := time.Since(startTime)
+					speed := float64(sizeBytes) / duration.Seconds() / 1024 / 1024 // MB/s
+					fmt.Printf("Transfer completed in %v. Speed: %.2f MB/s\n", duration, speed)
+
 					resolve.Invoke()
 				}()
 
@@ -534,8 +529,8 @@ func cpH(onIncomingFile js.Value, downloadFile js.Value) http.HandlerFunc {
 
 					// Read the entire stream and pass it to JavaScript
 					for {
-						// Read up to 16KB at a time
-						buf := make([]byte, 16384)
+						// Read up to 1MB at a time
+						buf := make([]byte, 1024*1024)
 						n, err := r.Body.Read(buf)
 						if err != nil && err != io.EOF {
 							// Tell the controller we have an error
@@ -577,4 +572,74 @@ func cpH(onIncomingFile js.Value, downloadFile js.Value) http.HandlerFunc {
 
 		downloadFile.Invoke(peer, fiName, r.ContentLength, readableStream)
 	}
+}
+
+// jsStreamReader implements io.Reader for JavaScript streams
+type jsStreamReader struct {
+	reader     js.Value
+	onProgress js.Value
+	bytesRead  int64
+	totalSize  int64
+	buffer     bytes.Buffer
+}
+
+func (r *jsStreamReader) Read(p []byte) (n int, err error) {
+	if r.bytesRead >= r.totalSize {
+		return 0, io.EOF
+	}
+
+	fmt.Printf("Read %d bytes\n", len(p))
+
+	// If we have buffered data, use it first
+	if r.buffer.Len() > 0 {
+		n, _ = r.buffer.Read(p)
+		r.bytesRead += int64(n)
+
+		if r.onProgress.Truthy() {
+			r.onProgress.Invoke(r.bytesRead)
+		}
+		return n, nil
+	}
+
+	// Only read from stream if buffer is empty
+	promise := r.reader.Call("read")
+	result := await(promise)
+
+	if result.Get("done").Bool() {
+		if r.bytesRead < r.totalSize {
+			return 0, fmt.Errorf("stream ended prematurely at %d/%d bytes", r.bytesRead, r.totalSize)
+		}
+		return 0, io.EOF
+	}
+
+	// Get the chunk from JavaScript and write it to our buffer
+	value := result.Get("value")
+	chunk := make([]byte, value.Length())
+	js.CopyBytesToGo(chunk, value)
+	r.buffer.Write(chunk)
+
+	// Now read what we can into p
+	n, _ = r.buffer.Read(p)
+	r.bytesRead += int64(n)
+
+	if r.onProgress.Truthy() {
+		r.onProgress.Invoke(r.bytesRead)
+	}
+
+	return n, nil
+}
+
+// Helper function to await a JavaScript promise
+func await(promise js.Value) js.Value {
+	done := make(chan js.Value)
+	promise.Call("then", js.FuncOf(func(_ js.Value, args []js.Value) interface{} {
+		done <- args[0]
+		return nil
+	}))
+	return <-done
+}
+
+func (r *jsStreamReader) Close() error {
+	r.reader.Call("releaseLock")
+	return nil
 }

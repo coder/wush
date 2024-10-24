@@ -1,41 +1,56 @@
+import Receive, { IncomingFile } from "components/Receive";
+import Send from "components/Send";
 import { createWush } from "context/wush";
 import { Code, Copy, FileUp, Star } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type TabType = "send" | "receive" | "access";
 
-const CommandLineInstructions = ({
-  type,
-}: {
-  type: "send" | "receive" | "access";
-}) => (
-  <div className="mt-4 p-4 bg-gray-700 rounded-md">
-    <h4 className="text-sm font-semibold mb-2 flex items-center text-gray-200">
-      <Code className="mr-2 h-4 w-4" />
-      Command-line Instructions
-    </h4>
-    <pre className="text-xs overflow-x-auto text-gray-300">
-      {type === "receive"
-        ? `# To send a file:
-wush send <file> <auth-key>`
-        : `# To start a wush server:
-wush server`}
-    </pre>
-  </div>
-);
-
 export default function Component() {
   const [authKey, setAuthKey] = useState("");
   const [activeTab, setActiveTab] = useState<TabType>("send");
-  const [wush, setWush] = useState<Wush | null>(null);
+  const [wush, setWush] = useState<Wush>();
+  const [incomingFiles, setIncomingFiles] = useState<IncomingFile[]>([]);
 
   useEffect(() => {
-    const wushPromise = createWush()
+    const wushPromise = createWush({
+      onIncomingFile: async (peer, filename, sizeBytes) => {
+        return new Promise<boolean>((resolve) => {
+          const newFile: IncomingFile = {
+            peer,
+            filename,
+            sizeBytes,
+            downloading: false,
+            bytesDownloaded: 0,
+            download: async () => {
+              // Update the file's downloading state
+              setIncomingFiles(files => 
+                files.map(f => 
+                  f === newFile ? { ...f, downloading: true } : f
+                )
+              );
+              resolve(true);
+            },
+            cancel: async () => {
+              resolve(false);
+              setIncomingFiles(files => files.filter(f => f !== newFile));
+            }
+          };
+          
+          setIncomingFiles(files => [...files, newFile]);
+        });
+      },
+      onNewPeer: (peer) => {},
+      downloadFile: async (peer, filename, sizeBytes, stream) => {
+        console.log("downloading file", peer, filename, sizeBytes);
+        
+      },
+    });
 
     wushPromise.then(setWush).catch(console.error);
     return () => {
       wushPromise.then((wush) => wush.stop());
-    }
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -117,51 +132,10 @@ export default function Component() {
             </div>
 
             <div className="p-6 space-y-4">
-              {activeTab === "send" && (
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <p className="text-sm text-gray-300">
-                    Enter the authentication key to send a file.
-                  </p>
-                  <input
-                    type="text"
-                    value={authKey}
-                    onChange={(e) => setAuthKey(e.target.value)}
-                    placeholder="Enter auth key"
-                    className="w-full p-3 border border-gray-600 rounded bg-gray-700 text-gray-200"
-                  />
-                  <button
-                    type="submit"
-                    className="w-full p-3 bg-blue-600 rounded flex items-center justify-center hover:bg-blue-700 transition-colors"
-                  >
-                    <FileUp className="mr-2 h-5 w-5" />
-                    Send File
-                  </button>
-                  <CommandLineInstructions type="send" />
-                </form>
-              )}
+              {activeTab === "send" && <Send wush={wush} />}
 
               {(activeTab === "receive" || activeTab === "access") && (
-                <div className="space-y-4">
-                  <p className="text-sm text-gray-300">
-                    Share this authentication key to receive a file.
-                  </p>
-                  <div className="flex">
-                    <input
-                      type="text"
-                      readOnly
-                      value={wush?.auth_info().auth_key || ""}
-                      className="flex-grow p-3 border border-gray-600 rounded-l bg-gray-700 text-gray-200"
-                    />
-                    <button
-                      onClick={handleCopyAuthKey}
-                      className="p-3 bg-blue-600 rounded-r hover:bg-blue-700 transition-colors"
-                    >
-                      <Copy className="h-5 w-5" />
-                    </button>
-                    {wush?.auth_info().derp_name}
-                  </div>
-                  <CommandLineInstructions type="receive" />
-                </div>
+                <Receive wush={wush} />
               )}
             </div>
           </div>

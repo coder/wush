@@ -25,10 +25,7 @@ declare global {
 			filename: string,
 			sizeBytes: number,
 			data: ReadableStream<Uint8Array>,
-			helper: (
-				stream: ReadableStream<Uint8Array>,
-				goCallback: (bytes: Uint8Array | null) => Promise<void>,
-			) => Promise<void>,
+			helper: (bytesRead: number) => void,
 		): Promise<void>;
 		stop(): void;
 	}
