@@ -12,7 +12,7 @@ require (
 	cdr.dev/slog v1.6.2-0.20240126064726-20367d4aede6
 	github.com/btcsuite/btcd/btcutil v1.1.6
 	github.com/charmbracelet/huh v0.6.0
-	github.com/coder/coder/v2 v2.16.0
+	github.com/coder/coder/v2 v2.16.1
 	github.com/coder/pretty v0.0.0-20230908205945-e89ba86370e0
 	github.com/coder/serpent v0.8.0
 	github.com/go-chi/chi/v5 v5.1.0
