@@ -382,7 +382,7 @@ func (r *Receive) handleNextMessage(src key.NodePublic, msg []byte, system strin
 
 		r.HumanLogf("%s Received connection request over %s from %s", cliui.Timestamp(time.Now()), system, cliui.Keyword(fmt.Sprintf("%s@%s", username, hostname)))
 	case messageTypeNodeUpdate:
-		r.HumanLogf("%s Received updated node from %s", cliui.Timestamp(time.Now()), cliui.Code(ovMsg.Node.Key.String()))
+		r.Logger.Debug("received updated node", slog.String("node_key", ovMsg.Node.Key.String()))
 		r.in <- &ovMsg.Node
 		res.Typ = messageTypeNodeUpdate
 		if lastNode := r.lastNode.Load(); lastNode != nil {

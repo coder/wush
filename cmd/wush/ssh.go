@@ -86,7 +86,7 @@ func sshCmd() *serpent.Command {
 				}
 			}
 
-			return xssh.TailnetSSH(ctx, inv, ts, ip.String()+":3", quiet)
+			return xssh.TailnetSSH(ctx, inv, ts, netip.AddrPortFrom(ip, 3).String(), quiet)
 		},
 		Options: []serpent.Option{
 			{

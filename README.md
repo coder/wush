@@ -11,6 +11,34 @@ shells over a peer-to-peer WireGuard connection. It's similar to
 1. Automatic peer-to-peer connections over UDP.
 1. Endless possibilities; rsync, ssh, etc.
 
+## Basic Usage
+
+On the host machine:
+
+```bash
+$ wush host
+Picked DERP region Toronto as overlay home
+Your auth key is:
+    >  112v1RyL5KPzsbMbhT7fkEGrcfpygxtnvwjR5kMLGxDHGeLTK1BvoPqsUcjo7xyMkFn46KLTdedKuPCG5trP84mz9kx
+Use this key to authenticate other wush commands to this instance.
+```
+
+On the client machine:
+
+```bash
+# Copy a file to the host
+$ wush cp 1gb.txt
+Uploading "1gb.txt" 100% |██████████████████████████████████████████████| (2.1/2.1 GB, 376 MB/s)
+
+# Open a shell to the host
+$ wush ssh
+┃ Enter the Auth key:
+┃ > 112v1RyL5KPzsbMbhT7fkEGrcfpygxtnvwjR5kMLGxDHGeLTK1BvoPqsUcjo7xyMkFn46KLTdedKuPCG5trP84mz9kx
+coder@colin:~$
+```
+
+[![asciicast](https://asciinema.org/a/ZrCNiRRkeHUi5Lj3fqC3ovLqi.svg)](https://asciinema.org/a/ZrCNiRRkeHUi5Lj3fqC3ovLqi)
+
 > [!NOTE]  
 > `wush` uses Tailscale's [tsnet](https://tailscale.com/kb/1244/tsnet) package
 > under the hood, managed by an in-memory control server on each CLI. We utilize
@@ -20,11 +48,13 @@ shells over a peer-to-peer WireGuard connection. It's similar to
 ## Install
 
 Using install script
+
 ```bash
 curl -fsSL https://wush.dev/install.sh | sh
 ```
 
 Using Homebrew
+
 ```bash
 brew install wush
 ```
@@ -40,56 +70,6 @@ For a manual installation, see the [latest release](https://github.com/coder/wus
 > # Linux only
 > sudo setcap cap_net_admin=eip $(which wush)
 > ```
-
-## Basic Usage
-
-[![asciicast](https://asciinema.org/a/ZrCNiRRkeHUi5Lj3fqC3ovLqi.svg)](https://asciinema.org/a/ZrCNiRRkeHUi5Lj3fqC3ovLqi)
-
-On the host machine:
-
-```bash
-$ wush host
-Picked DERP region Toronto as overlay home
-Your auth key is:
-    >  112v1RyL5KPzsbMbhT7fkEGrcfpygxtnvwjR5kMLGxDHGeLTK1BvoPqsUcjo7xyMkFn46KLTdedKuPCG5trP84mz9kx
-Use this key to authenticate other wush commands to this instance.
-05:18:59 WireGuard is ready
-05:18:59 SSH server listening
-```
-
-On the client machine:
-
-```bash
-# Copy a file to the receiver
-$ wush cp 1gb.txt
-Auth information:
-    > Server overlay STUN address:  Disabled
-    > Server overlay DERP home:     Toronto
-    > Server overlay public key:    [NFWN0]
-    > Server overlay auth key:      [mTbpN]
-Bringing WireGuard up..
-WireGuard is ready!
-Received peer
-Peer active with relay  nyc
-Peer active over p2p  172.20.0.8:53768
-Uploading "1gb.txt" 100% |██████████████████████████████████████████████| (2.1/2.1 GB, 376 MB/s)
-
-# Open a shell to the receiver
-$ wush ssh
-┃ Enter the receiver's Auth key:
-┃ > 112v1RyL5KPzsbMbhT7fkEGrcfpygxtnvwjR5kMLGxDHGeLTK1BvoPqsUcjo7xyMkFn46KLTdedKuPCG5trP84mz9kx
-Auth information:
-    > Server overlay STUN address:  Disabled
-    > Server overlay DERP home:     Toronto
-    > Server overlay public key:    [sEIS1]
-    > Server overlay auth key:      [w/sYF]
-Bringing WireGuard up..
-WireGuard is ready!
-Received peer
-Peer active with relay  nyc
-Peer active over p2p  172.20.0.8:44483
-coder@colin:~$
-```
 
 ## Technical Details
 

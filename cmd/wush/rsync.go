@@ -61,8 +61,7 @@ func rsyncCmd() *serpent.Command {
 					progPath, overlayOpts.clientAuth.AuthKey(), strings.Join(inv.Args, " "),
 				),
 			}
-			fmt.Println(args)
-			fmt.Println("Running: rsync", strings.Join(inv.Args, " "))
+			fmt.Println("Running rsync", strings.Join(inv.Args, " "))
 			cmd := exec.CommandContext(ctx, "sh", args...)
 			cmd.Stdin = inv.Stdin
 			cmd.Stdout = inv.Stdout

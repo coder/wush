@@ -40,7 +40,7 @@ require (
 	golang.org/x/sys v0.27.0
 	golang.org/x/term v0.25.0
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da
-	tailscale.com v1.70.0
+	tailscale.com v1.76.1
 )
 
 require (
