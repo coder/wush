@@ -1,10 +1,9 @@
 declare global {
 	function newWush(config: WushConfig): Promise<Wush>;
-	function exitWush(): void;
 
 	interface Wush {
 		auth_info(): AuthInfo;
-		connect(authKey: string): Promise<Peer>;
+		connect(authKey: string, offer: RTCSessionDescriptionInit): Promise<Peer>;
 		ping(peer: Peer): Promise<number>;
 		ssh(
 			peer: Peer,
@@ -26,24 +25,31 @@ declare global {
 			filename: string,
 			sizeBytes: number,
 			data: ReadableStream<Uint8Array>,
-			helper: (
-				stream: ReadableStream<Uint8Array>,
-				goCallback: (bytes: Uint8Array | null) => Promise<void>,
-			) => Promise<void>,
+			helper: (bytesRead: number) => void,
 		): Promise<void>;
 		stop(): void;
+
+		sendWebrtcCandidate(peer: string, candidate: RTCIceCandidate);
+		parseAuthKey(authKey: string): PeerAuthInfo;
 	}
+
+	type PeerAuthInfo = {
+		id: string;
+		type: "cli" | "web";
+	};
 
 	type AuthInfo = {
 		derp_id: number;
 		derp_name: string;
+		derp_latency: number;
 		auth_key: string;
 	};
 
 	type Peer = {
-		id: number;
+		id: string;
 		name: string;
 		ip: string;
+		type: "cli" | "web";
 		cancel: () => void;
 	};
 
@@ -66,6 +72,19 @@ declare global {
 			filename: string,
 			sizeBytes: number,
 			stream: ReadableStream<Uint8Array>,
+		) => Promise<void>;
+
+		onWebrtcOffer: (
+			id: string,
+			offer: RTCSessionDescriptionInit,
+		) => Promise<RTCSessionDescription | null>;
+		onWebrtcAnswer: (
+			id: string,
+			answer: RTCSessionDescriptionInit,
+		) => Promise<void>;
+		onWebrtcCandidate: (
+			id: string,
+			candidate: RTCIceCandidateInit,
 		) => Promise<void>;
 	};
 }

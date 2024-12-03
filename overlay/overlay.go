@@ -4,15 +4,18 @@ import (
 	"net/netip"
 
 	"github.com/google/uuid"
+	"github.com/pion/webrtc/v4"
 	"tailscale.com/tailcfg"
 )
+
+type Logf func(format string, args ...any)
 
 // Overlay specifies the mechanism by which senders and receivers exchange
 // Tailscale nodes over a sidechannel.
 type Overlay interface {
 	// listenOverlay(ctx context.Context, kind string) error
 	Recv() <-chan *tailcfg.Node
-	Send() chan<- *tailcfg.Node
+	SendTailscaleNodeUpdate(node *tailcfg.Node)
 	IPs() []netip.Addr
 }
 
@@ -24,6 +27,10 @@ const (
 	messageTypeHello
 	messageTypeHelloResponse
 	messageTypeNodeUpdate
+
+	messageTypeWebRTCOffer
+	messageTypeWebRTCAnswer
+	messageTypeWebRTCCandidate
 )
 
 type overlayMessage struct {
@@ -31,6 +38,9 @@ type overlayMessage struct {
 
 	HostInfo HostInfo
 	Node     tailcfg.Node
+
+	WebrtcDescription *webrtc.SessionDescription
+	WebrtcCandidate   *webrtc.ICECandidateInit
 }
 
 type HostInfo struct {

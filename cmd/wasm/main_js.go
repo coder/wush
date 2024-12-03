@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -15,8 +16,10 @@ import (
 	"syscall/js"
 	"time"
 
+	"github.com/coder/coder/v2/coderd/util/ptr"
 	"github.com/coder/wush/overlay"
 	"github.com/coder/wush/tsserver"
+	"github.com/pion/webrtc/v4"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/xerrors"
 	"tailscale.com/ipn/store"
@@ -46,10 +49,6 @@ func main() {
 		promiseConstructor := js.Global().Get("Promise")
 		return promiseConstructor.New(handler)
 	}))
-	js.Global().Set("exitWush", js.FuncOf(func(this js.Value, args []js.Value) any {
-		// close(ch)
-		return nil
-	}))
 
 	// Keep the main function running
 	<-make(chan struct{}, 0)
@@ -66,7 +65,12 @@ func newWush(cfg js.Value) map[string]any {
 		panic(err)
 	}
 
-	ov := overlay.NewWasmOverlay(log.Printf, dm, cfg.Get("onNewPeer"))
+	ov := overlay.NewWasmOverlay(log.Printf, dm,
+		cfg.Get("onNewPeer"),
+		cfg.Get("onWebrtcOffer"),
+		cfg.Get("onWebrtcAnswer"),
+		cfg.Get("onWebrtcCandidate"),
+	)
 
 	err = ov.PickDERPHome(ctx)
 	if err != nil {
@@ -116,9 +120,10 @@ func newWush(cfg js.Value) map[string]any {
 			}
 
 			return map[string]any{
-				"derp_id":   ov.DerpRegionID,
-				"derp_name": ov.DerpMap.Regions[int(ov.DerpRegionID)].RegionName,
-				"auth_key":  ov.ClientAuth().AuthKey(),
+				"derp_id":      ov.DerpRegionID,
+				"derp_name":    ov.DerpMap.Regions[int(ov.DerpRegionID)].RegionName,
+				"derp_latency": ov.DerpLatency.Milliseconds(),
+				"auth_key":     ov.ClientAuth().AuthKey(),
 			}
 		}),
 		"stop": js.FuncOf(func(this js.Value, args []js.Value) any {
@@ -131,14 +136,14 @@ func newWush(cfg js.Value) map[string]any {
 			return nil
 		}),
 		"ssh": js.FuncOf(func(this js.Value, args []js.Value) any {
-			if len(args) != 1 {
-				log.Printf("Usage: ssh({})")
+			if len(args) != 2 {
+				log.Printf("Usage: ssh(peer, config)")
 				return nil
 			}
 
 			sess := &sshSession{
 				ts:  ts,
-				cfg: args[0],
+				cfg: args[1],
 			}
 
 			go sess.Run()
@@ -160,9 +165,9 @@ func newWush(cfg js.Value) map[string]any {
 				reject := promiseArgs[1]
 
 				go func() {
-					if len(args) != 1 {
+					if len(args) != 2 {
 						errorConstructor := js.Global().Get("Error")
-						errorObject := errorConstructor.New("Usage: connect(authKey)")
+						errorObject := errorConstructor.New("Usage: connect(authKey, offer)")
 						reject.Invoke(errorObject)
 						return
 					}
@@ -172,7 +177,18 @@ func newWush(cfg js.Value) map[string]any {
 						authKey = args[0].String()
 					} else {
 						errorConstructor := js.Global().Get("Error")
-						errorObject := errorConstructor.New("Usage: connect(authKey)")
+						errorObject := errorConstructor.New("Usage: connect(authKey, offer)")
+						reject.Invoke(errorObject)
+						return
+					}
+
+					var offer webrtc.SessionDescription
+					if jsOffer := args[1]; jsOffer.Type() == js.TypeObject {
+						offer.SDP = jsOffer.Get("sdp").String()
+						offer.Type = webrtc.NewSDPType(jsOffer.Get("type").String())
+					} else {
+						errorConstructor := js.Global().Get("Error")
+						errorObject := errorConstructor.New("Usage: connect(authKey, offer)")
 						reject.Invoke(errorObject)
 						return
 					}
@@ -187,11 +203,11 @@ func newWush(cfg js.Value) map[string]any {
 					}
 
 					ctx, cancel := context.WithCancel(context.Background())
-					peer, err := ov.Connect(ctx, ca)
+					peer, err := ov.Connect(ctx, ca, offer)
 					if err != nil {
 						cancel()
 						errorConstructor := js.Global().Get("Error")
-						errorObject := errorConstructor.New(fmt.Errorf("parse authkey: %w", err).Error())
+						errorObject := errorConstructor.New(fmt.Errorf("connect to peer: %w", err).Error())
 						reject.Invoke(errorObject)
 						return
 					}
@@ -200,6 +216,7 @@ func newWush(cfg js.Value) map[string]any {
 						"id":   js.ValueOf(peer.ID),
 						"name": js.ValueOf(peer.Name),
 						"ip":   js.ValueOf(peer.IP.String()),
+						"type": js.ValueOf(peer.Type),
 						"cancel": js.FuncOf(func(this js.Value, args []js.Value) any {
 							cancel()
 							return nil
@@ -220,7 +237,7 @@ func newWush(cfg js.Value) map[string]any {
 
 				if len(args) != 5 {
 					errorConstructor := js.Global().Get("Error")
-					errorObject := errorConstructor.New("Usage: transfer(peer, file)")
+					errorObject := errorConstructor.New("Usage: transfer(peer, fileName, sizeBytes, stream, onProgress)")
 					reject.Invoke(errorObject)
 					return nil
 				}
@@ -228,53 +245,26 @@ func newWush(cfg js.Value) map[string]any {
 				peer := args[0]
 				ip := peer.Get("ip").String()
 				fileName := args[1].String()
-				sizeBytes := args[2].Int()
+				sizeBytes := int64(args[2].Int())
 				stream := args[3]
-				streamHelper := args[4]
-
-				pr, pw := io.Pipe()
-
-				goCallback := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-					promiseConstructor := js.Global().Get("Promise")
-					return promiseConstructor.New(js.FuncOf(func(this js.Value, promiseArgs []js.Value) any {
-						resolve := promiseArgs[0]
-						_ = promiseArgs[1]
-						go func() {
-							if len(args) == 0 || args[0].IsNull() || args[0].IsUndefined() {
-								pw.Close()
-								resolve.Invoke()
-								return
-							}
-
-							fmt.Println("in go callback")
-							// Convert the JavaScript Uint8Array to a Go byte slice
-							uint8Array := args[0]
-							fmt.Println("type is", uint8Array.Type().String())
-							length := uint8Array.Get("length").Int()
-							buf := make([]byte, length)
-							js.CopyBytesToGo(buf, uint8Array)
-
-							fmt.Println("sending data to channel")
-							// Send the data to the channel
-							if _, err := pw.Write(buf); err != nil {
-								pw.CloseWithError(err)
-							}
-							fmt.Println("callback finished")
-
-							// Resolve the promise
-							resolve.Invoke()
-						}()
-						return nil
-					}))
-				})
+				onProgress := args[4]
 
 				go func() {
-					defer goCallback.Release()
-
-					streamHelper.Invoke(stream, goCallback)
-
-					hc := ts.HTTPClient()
-					req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s:4444/%s", ip, fileName), pr)
+					startTime := time.Now()
+					reader := &jsStreamReader{
+						reader:     stream.Call("getReader"),
+						onProgress: onProgress,
+						totalSize:  sizeBytes,
+					}
+					bufferSize := 1024 * 1024
+					hc := &http.Client{
+						Transport: &http.Transport{
+							DialContext:     ts.Dial,
+							ReadBufferSize:  bufferSize,
+							WriteBufferSize: bufferSize,
+						},
+					}
+					req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s:4444/%s", ip, fileName), bufio.NewReaderSize(reader, bufferSize))
 					if err != nil {
 						errorConstructor := js.Global().Get("Error")
 						errorObject := errorConstructor.New(err.Error())
@@ -283,6 +273,7 @@ func newWush(cfg js.Value) map[string]any {
 					}
 					req.ContentLength = int64(sizeBytes)
 
+					fmt.Printf("Starting transfer of %d bytes\n", sizeBytes)
 					res, err := hc.Do(req)
 					if err != nil {
 						errorConstructor := js.Global().Get("Error")
@@ -295,7 +286,10 @@ func newWush(cfg js.Value) map[string]any {
 					bod := bytes.NewBuffer(nil)
 					_, _ = io.Copy(bod, res.Body)
 
-					fmt.Println(bod.String())
+					duration := time.Since(startTime)
+					speed := float64(sizeBytes) / duration.Seconds() / 1024 / 1024 // MB/s
+					fmt.Printf("Transfer completed in %v. Speed: %.2f MB/s\n", duration, speed)
+
 					resolve.Invoke()
 				}()
 
@@ -304,6 +298,36 @@ func newWush(cfg js.Value) map[string]any {
 
 			promiseConstructor := js.Global().Get("Promise")
 			return promiseConstructor.New(handler)
+		}),
+
+		"sendWebrtcCandidate": js.FuncOf(func(this js.Value, args []js.Value) any {
+			peer := args[0].String()
+			candidate := args[1]
+
+			ov.SendWebrtcCandidate(peer, webrtc.ICECandidateInit{
+				Candidate:        candidate.Get("candidate").String(),
+				SDPMLineIndex:    ptr.Ref(uint16(candidate.Get("sdpMLineIndex").Int())),
+				SDPMid:           ptr.Ref(candidate.Get("sdpMid").String()),
+				UsernameFragment: ptr.Ref(candidate.Get("sdpMid").String()),
+			})
+
+			return nil
+		}),
+
+		"parseAuthKey": js.FuncOf(func(this js.Value, args []js.Value) any {
+			authKey := args[0].String()
+
+			var ca overlay.ClientAuth
+			_ = ca.Parse(authKey)
+			typ := "cli"
+			if ca.Web {
+				typ = "web"
+			}
+
+			return map[string]any{
+				"id":   js.ValueOf(ca.ReceiverPublicKey.String()),
+				"type": js.ValueOf(typ),
+			}
 		}),
 	}
 }
@@ -359,7 +383,7 @@ func (s *sshSession) Run() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds*float64(time.Second)))
 	defer cancel()
 	reportProgress(fmt.Sprintf("Connecting..."))
-	c, err := s.ts.Dial(ctx, "tcp", net.JoinHostPort("100.64.0.0", "3"))
+	c, err := s.ts.Dial(ctx, "tcp", net.JoinHostPort("fd7a:115c:a1e0::1", "3"))
 	if err != nil {
 		writeError("Dial", err)
 		return
@@ -538,8 +562,8 @@ func cpH(onIncomingFile js.Value, downloadFile js.Value) http.HandlerFunc {
 
 					// Read the entire stream and pass it to JavaScript
 					for {
-						// Read up to 16KB at a time
-						buf := make([]byte, 16384)
+						// Read up to 1MB at a time
+						buf := make([]byte, 1024*1024)
 						n, err := r.Body.Read(buf)
 						if err != nil && err != io.EOF {
 							// Tell the controller we have an error
@@ -581,4 +605,74 @@ func cpH(onIncomingFile js.Value, downloadFile js.Value) http.HandlerFunc {
 
 		downloadFile.Invoke(peer, fiName, r.ContentLength, readableStream)
 	}
+}
+
+// jsStreamReader implements io.Reader for JavaScript streams
+type jsStreamReader struct {
+	reader     js.Value
+	onProgress js.Value
+	bytesRead  int64
+	totalSize  int64
+	buffer     bytes.Buffer
+}
+
+func (r *jsStreamReader) Read(p []byte) (n int, err error) {
+	if r.bytesRead >= r.totalSize {
+		return 0, io.EOF
+	}
+
+	fmt.Printf("Read %d bytes\n", len(p))
+
+	// If we have buffered data, use it first
+	if r.buffer.Len() > 0 {
+		n, _ = r.buffer.Read(p)
+		r.bytesRead += int64(n)
+
+		if r.onProgress.Truthy() {
+			r.onProgress.Invoke(r.bytesRead)
+		}
+		return n, nil
+	}
+
+	// Only read from stream if buffer is empty
+	promise := r.reader.Call("read")
+	result := await(promise)
+
+	if result.Get("done").Bool() {
+		if r.bytesRead < r.totalSize {
+			return 0, fmt.Errorf("stream ended prematurely at %d/%d bytes", r.bytesRead, r.totalSize)
+		}
+		return 0, io.EOF
+	}
+
+	// Get the chunk from JavaScript and write it to our buffer
+	value := result.Get("value")
+	chunk := make([]byte, value.Length())
+	js.CopyBytesToGo(chunk, value)
+	r.buffer.Write(chunk)
+
+	// Now read what we can into p
+	n, _ = r.buffer.Read(p)
+	r.bytesRead += int64(n)
+
+	if r.onProgress.Truthy() {
+		r.onProgress.Invoke(r.bytesRead)
+	}
+
+	return n, nil
+}
+
+// Helper function to await a JavaScript promise
+func await(promise js.Value) js.Value {
+	done := make(chan js.Value)
+	promise.Call("then", js.FuncOf(func(_ js.Value, args []js.Value) interface{} {
+		done <- args[0]
+		return nil
+	}))
+	return <-done
+}
+
+func (r *jsStreamReader) Close() error {
+	r.reader.Call("releaseLock")
+	return nil
 }

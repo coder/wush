@@ -15,6 +15,7 @@ import (
 )
 
 type ClientAuth struct {
+	Web bool
 	// OverlayPrivateKey is the main auth mechanism used to secure the overlay.
 	// Peers are sent this private key to encrypt node communication to the
 	// receiver. Leaking this private key would allow anyone to connect.
@@ -49,6 +50,14 @@ func (ca *ClientAuth) PrintDebug(logf func(str string, args ...any), dm *tailcfg
 func (ca *ClientAuth) AuthKey() string {
 	buf := bytes.NewBuffer(nil)
 
+	buf.WriteByte(1)
+
+	if ca.Web {
+		buf.WriteByte(1)
+	} else {
+		buf.WriteByte(0)
+	}
+
 	buf.WriteByte(byte(ca.ReceiverStunAddr.Addr().BitLen() / 8))
 	if ca.ReceiverStunAddr.Addr().BitLen() > 0 {
 		stunBytes, err := ca.ReceiverStunAddr.MarshalBinary()
@@ -77,6 +86,24 @@ func (ca *ClientAuth) Parse(authKey string) error {
 	}
 
 	decr := bytes.NewReader(base58.Decode(authKey))
+
+	ver, err := decr.ReadByte()
+	if err != nil {
+		return errors.New("read authkey version")
+	}
+
+	if ver != 1 {
+		return fmt.Errorf("unsupported authkey version %q", ver)
+	}
+
+	typ, err := decr.ReadByte()
+	if err != nil {
+		return errors.New("read authkey peer type")
+	}
+
+	if typ == 1 {
+		ca.Web = true
+	}
 
 	ipLenB, err := decr.ReadByte()
 	if err != nil {

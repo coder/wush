@@ -12,12 +12,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/huh"
 	"github.com/coder/serpent"
 	"github.com/coder/wush/cliui"
 	"github.com/coder/wush/overlay"
 	"github.com/coder/wush/tsserver"
+	"github.com/pion/webrtc/v4"
 	"github.com/schollz/progressbar/v3"
 	"tailscale.com/net/netns"
 	"tailscale.com/tailcfg"
@@ -164,6 +166,94 @@ func cpCmd() *serpent.Command {
 			}
 
 			go s.ListenAndServe(ctx)
+
+			fiPath := inv.Args[0]
+			fiName := filepath.Base(inv.Args[0])
+
+			fi, err := os.Open(fiPath)
+			if err != nil {
+				return err
+			}
+			defer fi.Close()
+
+			fiStat, err := fi.Stat()
+			if err != nil {
+				return err
+			}
+
+			if send.Auth.Web {
+				meta := overlay.RtcMetadata{
+					Type: overlay.RtcMetadataTypeFileMetadata,
+					FileMetadata: overlay.RtcFileMetadata{
+						FileName: fiName,
+						FileSize: int(fiStat.Size()),
+					},
+				}
+
+				raw, err := json.Marshal(meta)
+				if err != nil {
+					panic(err)
+				}
+
+				logf("Waiting for data channel to open...")
+				for {
+					if send.RtcDc.ReadyState() == webrtc.DataChannelStateOpen {
+						break
+					}
+					time.Sleep(100 * time.Millisecond)
+				}
+				logf("Data channel is open!")
+
+				if err := send.RtcDc.SendText(string(raw)); err != nil {
+					panic(err)
+				}
+
+				bar := progressbar.DefaultBytes(
+					fiStat.Size(),
+					fmt.Sprintf("Uploading %q", fiPath),
+				)
+				barReader := progressbar.NewReader(fi, bar)
+
+				buf := make([]byte, 16384)
+
+				for {
+					n, err := barReader.Read(buf)
+					if err != nil && err != io.EOF {
+						return err
+					}
+
+					if n > 0 {
+						if err := send.RtcDc.Send(buf[:n]); err != nil {
+							fmt.Println("failed to send file data: ", err)
+							return err
+						}
+					}
+
+					if err == io.EOF {
+						break
+					}
+				}
+
+				meta = overlay.RtcMetadata{
+					Type: overlay.RtcMetadataTypeFileComplete,
+				}
+
+				raw, err = json.Marshal(meta)
+				if err != nil {
+					panic(err)
+				}
+
+				if err := send.RtcDc.SendText(string(raw)); err != nil {
+					fmt.Println("failed to send file complete message", err)
+				}
+
+				select {
+				case <-send.WaitTransferDone:
+					logger.Info("received file transfer acknowledgment")
+					return nil
+				}
+			}
+
 			netns.SetDialerOverride(s.Dialer())
 			ts, err := newTSNet("send", verbose)
 			if err != nil {
@@ -189,20 +279,6 @@ func cpCmd() *serpent.Command {
 				if err != nil {
 					return err
 				}
-			}
-
-			fiPath := inv.Args[0]
-			fiName := filepath.Base(inv.Args[0])
-
-			fi, err := os.Open(fiPath)
-			if err != nil {
-				return err
-			}
-			defer fi.Close()
-
-			fiStat, err := fi.Stat()
-			if err != nil {
-				return err
 			}
 
 			bar := progressbar.DefaultBytes(

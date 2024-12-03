@@ -32,7 +32,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 	"tailscale.com/control/controlbase"
-	"tailscale.com/control/controlhttp"
+	"tailscale.com/control/controlhttp/controlhttpserver"
 	"tailscale.com/net/netns"
 	"tailscale.com/smallzstd"
 	"tailscale.com/tailcfg"
@@ -117,7 +117,7 @@ func (s *server) ListenAndServe(_ context.Context) error {
 					node: node,
 				}
 			case <-s.nodeUpdate:
-				s.overlay.Send() <- s.node.Load()
+				s.overlay.SendTailscaleNodeUpdate(s.node.Load())
 			}
 		}
 	}()
@@ -246,7 +246,7 @@ func (s *server) NoiseUpgradeHandler(w http.ResponseWriter, r *http.Request) {
 		getIPs:     s.overlay.IPs,
 	}
 
-	noiseConn, err := controlhttp.AcceptHTTP(
+	noiseConn, err := controlhttpserver.AcceptHTTP(
 		r.Context(),
 		w,
 		r,
@@ -326,7 +326,6 @@ type noiseServer struct {
 	http2Server    *http2.Server
 	conn           *controlbase.Conn
 	machineKey     key.MachinePublic
-	nodeKey        key.NodePublic
 	derpMap        *tailcfg.DERPMap
 	getIPs         func() []netip.Addr
 
@@ -374,7 +373,19 @@ func (ns *noiseServer) NoiseRegistrationHandler(w http.ResponseWriter, r *http.R
 		DisplayName: "wgsh",
 	}
 
-	ns.nodeKey = registerRequest.NodeKey
+	if !registerRequest.Expiry.IsZero() && registerRequest.Expiry.Before(time.Now()) {
+		node := ns.getSelfNode().Clone()
+		if node != nil {
+			node.Online = ptr.To(false)
+			ns.storeNode(node)
+		}
+		ns.notifyUpdate()
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
+		return
+	}
 
 	nodeID := tailcfg.NodeID(rand.Int64())
 	addrs := []netip.Prefix{}
@@ -392,6 +403,7 @@ func (ns *noiseServer) NoiseRegistrationHandler(w http.ResponseWriter, r *http.R
 		Key:        registerRequest.NodeKey,
 		LastSeen:   ptr.To(time.Now()),
 		Cap:        registerRequest.Version,
+		Online:     ptr.To(true),
 		Addresses:  addrs,
 		AllowedIPs: addrs,
 		CapMap: tailcfg.NodeCapMap{
