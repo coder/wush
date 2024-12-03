@@ -17,7 +17,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/pion/stun/v3"
 	"github.com/pion/webrtc/v4"
 	"github.com/puzpuzpuz/xsync/v3"
@@ -461,7 +460,6 @@ func (r *Receive) setupWebrtcConnection(src key.NodePublic, res *overlayMessage,
 					d.Close()
 					return
 				}
-				spew.Dump(meta)
 
 				if meta.Type == RtcMetadataTypeFileMetadata {
 					fiSize = meta.FileMetadata.FileSize
@@ -469,8 +467,6 @@ func (r *Receive) setupWebrtcConnection(src key.NodePublic, res *overlayMessage,
 					if err != nil {
 						fmt.Println("failed to open file", err)
 					}
-					fmt.Println("opened file", fi.Name())
-					fmt.Println("opened file", fi.Name())
 
 					bar = progressbar.DefaultBytes(
 						int64(fiSize),

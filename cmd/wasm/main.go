@@ -64,23 +64,6 @@ func newWush(cfg js.Value) map[string]any {
 	if err != nil {
 		panic(err)
 	}
-	// var err error
-	// dm := &tailcfg.DERPMap{
-	// 	Regions: map[int]*tailcfg.DERPRegion{
-	// 		1: {
-	// 			RegionID:   1,
-	// 			RegionCode: "east4",
-	// 			RegionName: "GCP US East 4",
-	// 			Nodes: []*tailcfg.DERPNode{{
-	// 				Name:      "1",
-	// 				RegionID:  1,
-	// 				HostName:  "derp1-east4-gcp.derp.wush.dev",
-	// 				IPv4:      "34.21.11.126",
-	// 				CanPort80: true,
-	// 			}},
-	// 		},
-	// 	},
-	// }
 
 	ov := overlay.NewWasmOverlay(log.Printf, dm,
 		cfg.Get("onNewPeer"),

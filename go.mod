@@ -4,9 +4,9 @@ go 1.23.1
 
 toolchain go1.23.2
 
-// replace tailscale.com => github.com/coadler/tailscale v1.1.1-0.20240926000438-059d0c1039af
+replace tailscale.com => github.com/coadler/tailscale v1.1.1-0.20241122221419-49dfbfcd5e09
 
-replace tailscale.com => /home/colin/Projects/coadler/tailscale
+// replace tailscale.com => /home/colin/Projects/coadler/tailscale
 
 replace github.com/gliderlabs/ssh => github.com/coder/ssh v0.0.0-20231128192721-70855dedb788
 
@@ -17,7 +17,6 @@ require (
 	github.com/coder/coder/v2 v2.16.0
 	github.com/coder/pretty v0.0.0-20230908205945-e89ba86370e0
 	github.com/coder/serpent v0.8.0
-	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/google/uuid v1.6.0
 	github.com/klauspost/compress v1.17.11
