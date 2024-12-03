@@ -16,8 +16,10 @@ import (
 	"syscall/js"
 	"time"
 
+	"github.com/coder/coder/v2/coderd/util/ptr"
 	"github.com/coder/wush/overlay"
 	"github.com/coder/wush/tsserver"
+	"github.com/pion/webrtc/v4"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/xerrors"
 	"tailscale.com/ipn/store"
@@ -80,7 +82,12 @@ func newWush(cfg js.Value) map[string]any {
 	// 	},
 	// }
 
-	ov := overlay.NewWasmOverlay(log.Printf, dm, cfg.Get("onNewPeer"))
+	ov := overlay.NewWasmOverlay(log.Printf, dm,
+		cfg.Get("onNewPeer"),
+		cfg.Get("onWebrtcOffer"),
+		cfg.Get("onWebrtcAnswer"),
+		cfg.Get("onWebrtcCandidate"),
+	)
 
 	err = ov.PickDERPHome(ctx)
 	if err != nil {
@@ -130,9 +137,10 @@ func newWush(cfg js.Value) map[string]any {
 			}
 
 			return map[string]any{
-				"derp_id":   ov.DerpRegionID,
-				"derp_name": ov.DerpMap.Regions[int(ov.DerpRegionID)].RegionName,
-				"auth_key":  ov.ClientAuth().AuthKey(),
+				"derp_id":      ov.DerpRegionID,
+				"derp_name":    ov.DerpMap.Regions[int(ov.DerpRegionID)].RegionName,
+				"derp_latency": ov.DerpLatency.Milliseconds(),
+				"auth_key":     ov.ClientAuth().AuthKey(),
 			}
 		}),
 		"stop": js.FuncOf(func(this js.Value, args []js.Value) any {
@@ -145,14 +153,14 @@ func newWush(cfg js.Value) map[string]any {
 			return nil
 		}),
 		"ssh": js.FuncOf(func(this js.Value, args []js.Value) any {
-			if len(args) != 1 {
-				log.Printf("Usage: ssh({})")
+			if len(args) != 2 {
+				log.Printf("Usage: ssh(peer, config)")
 				return nil
 			}
 
 			sess := &sshSession{
 				ts:  ts,
-				cfg: args[0],
+				cfg: args[1],
 			}
 
 			go sess.Run()
@@ -174,9 +182,9 @@ func newWush(cfg js.Value) map[string]any {
 				reject := promiseArgs[1]
 
 				go func() {
-					if len(args) != 1 {
+					if len(args) != 2 {
 						errorConstructor := js.Global().Get("Error")
-						errorObject := errorConstructor.New("Usage: connect(authKey)")
+						errorObject := errorConstructor.New("Usage: connect(authKey, offer)")
 						reject.Invoke(errorObject)
 						return
 					}
@@ -186,7 +194,18 @@ func newWush(cfg js.Value) map[string]any {
 						authKey = args[0].String()
 					} else {
 						errorConstructor := js.Global().Get("Error")
-						errorObject := errorConstructor.New("Usage: connect(authKey)")
+						errorObject := errorConstructor.New("Usage: connect(authKey, offer)")
+						reject.Invoke(errorObject)
+						return
+					}
+
+					var offer webrtc.SessionDescription
+					if jsOffer := args[1]; jsOffer.Type() == js.TypeObject {
+						offer.SDP = jsOffer.Get("sdp").String()
+						offer.Type = webrtc.NewSDPType(jsOffer.Get("type").String())
+					} else {
+						errorConstructor := js.Global().Get("Error")
+						errorObject := errorConstructor.New("Usage: connect(authKey, offer)")
 						reject.Invoke(errorObject)
 						return
 					}
@@ -201,11 +220,11 @@ func newWush(cfg js.Value) map[string]any {
 					}
 
 					ctx, cancel := context.WithCancel(context.Background())
-					peer, err := ov.Connect(ctx, ca)
+					peer, err := ov.Connect(ctx, ca, offer)
 					if err != nil {
 						cancel()
 						errorConstructor := js.Global().Get("Error")
-						errorObject := errorConstructor.New(fmt.Errorf("parse authkey: %w", err).Error())
+						errorObject := errorConstructor.New(fmt.Errorf("connect to peer: %w", err).Error())
 						reject.Invoke(errorObject)
 						return
 					}
@@ -214,6 +233,7 @@ func newWush(cfg js.Value) map[string]any {
 						"id":   js.ValueOf(peer.ID),
 						"name": js.ValueOf(peer.Name),
 						"ip":   js.ValueOf(peer.IP.String()),
+						"type": js.ValueOf(peer.Type),
 						"cancel": js.FuncOf(func(this js.Value, args []js.Value) any {
 							cancel()
 							return nil
@@ -296,6 +316,36 @@ func newWush(cfg js.Value) map[string]any {
 			promiseConstructor := js.Global().Get("Promise")
 			return promiseConstructor.New(handler)
 		}),
+
+		"sendWebrtcCandidate": js.FuncOf(func(this js.Value, args []js.Value) any {
+			peer := args[0].String()
+			candidate := args[1]
+
+			ov.SendWebrtcCandidate(peer, webrtc.ICECandidateInit{
+				Candidate:        candidate.Get("candidate").String(),
+				SDPMLineIndex:    ptr.Ref(uint16(candidate.Get("sdpMLineIndex").Int())),
+				SDPMid:           ptr.Ref(candidate.Get("sdpMid").String()),
+				UsernameFragment: ptr.Ref(candidate.Get("sdpMid").String()),
+			})
+
+			return nil
+		}),
+
+		"parseAuthKey": js.FuncOf(func(this js.Value, args []js.Value) any {
+			authKey := args[0].String()
+
+			var ca overlay.ClientAuth
+			_ = ca.Parse(authKey)
+			typ := "cli"
+			if ca.Web {
+				typ = "web"
+			}
+
+			return map[string]any{
+				"id":   js.ValueOf(ca.ReceiverPublicKey.String()),
+				"type": js.ValueOf(typ),
+			}
+		}),
 	}
 }
 
@@ -350,7 +400,7 @@ func (s *sshSession) Run() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds*float64(time.Second)))
 	defer cancel()
 	reportProgress(fmt.Sprintf("Connecting..."))
-	c, err := s.ts.Dial(ctx, "tcp", net.JoinHostPort("100.64.0.0", "3"))
+	c, err := s.ts.Dial(ctx, "tcp", net.JoinHostPort("fd7a:115c:a1e0::1", "3"))
 	if err != nil {
 		writeError("Dial", err)
 		return

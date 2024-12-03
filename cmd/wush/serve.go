@@ -106,7 +106,7 @@ func serveCmd() *serpent.Command {
 			ts.Up(ctx)
 			fs := afero.NewOsFs()
 
-			hlog("WireGuard is ready")
+			// hlog("WireGuard is ready")
 
 			closers := []io.Closer{}
 
@@ -129,7 +129,7 @@ func serveCmd() *serpent.Command {
 				closers = append(closers, sshListener)
 
 				// TODO: replace these logs with all of the options in the beginning.
-				hlog("SSH server " + pretty.Sprint(cliui.DefaultStyles.Enabled, "enabled"))
+				// hlog("SSH server " + pretty.Sprint(cliui.DefaultStyles.Enabled, "enabled"))
 				go func() {
 					err := sshSrv.Serve(sshListener)
 					if err != nil {
@@ -147,7 +147,7 @@ func serveCmd() *serpent.Command {
 				}
 				closers = append([]io.Closer{cpListener}, closers...)
 
-				hlog("File transfer server " + pretty.Sprint(cliui.DefaultStyles.Enabled, "enabled"))
+				// hlog("File transfer server " + pretty.Sprint(cliui.DefaultStyles.Enabled, "enabled"))
 				go func() {
 					err := http.Serve(cpListener, http.HandlerFunc(cpHandler))
 					if err != nil {
@@ -171,7 +171,7 @@ func serveCmd() *serpent.Command {
 						bicopy(ctx, src, dst)
 					}, true
 				})
-				hlog("Port-forward server " + pretty.Sprint(cliui.DefaultStyles.Enabled, "enabled"))
+				// hlog("Port-forward server " + pretty.Sprint(cliui.DefaultStyles.Enabled, "enabled"))
 			} else {
 				hlog("Port-forward server " + pretty.Sprint(cliui.DefaultStyles.Disabled, "disabled"))
 			}

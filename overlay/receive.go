@@ -1,3 +1,6 @@
+//go:build !js && !wasm
+// +build !js,!wasm
+
 package overlay
 
 import (
@@ -5,15 +8,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/netip"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/pion/stun/v3"
+	"github.com/pion/webrtc/v4"
 	"github.com/puzpuzpuz/xsync/v3"
+	"github.com/schollz/progressbar/v3"
 	"tailscale.com/derp"
 	"tailscale.com/derp/derphttp"
 	"tailscale.com/net/netcheck"
@@ -26,17 +34,16 @@ import (
 	"github.com/coder/wush/cliui"
 )
 
-type Logf func(format string, args ...any)
-
 func NewReceiveOverlay(logger *slog.Logger, hlog Logf, dm *tailcfg.DERPMap) *Receive {
 	return &Receive{
-		Logger:    logger,
-		HumanLogf: hlog,
-		DerpMap:   dm,
-		SelfPriv:  key.NewNode(),
-		PeerPriv:  key.NewNode(),
-		in:        make(chan *tailcfg.Node, 8),
-		out:       make(chan *tailcfg.Node, 8),
+		Logger:      logger,
+		HumanLogf:   hlog,
+		DerpMap:     dm,
+		SelfPriv:    key.NewNode(),
+		PeerPriv:    key.NewNode(),
+		webrtcConns: xsync.NewMapOf[key.NodePublic, *webrtc.PeerConnection](),
+		in:          make(chan *tailcfg.Node, 8),
+		out:         make(chan *overlayMessage, 8),
 	}
 }
 
@@ -59,11 +66,13 @@ type Receive struct {
 	// communication.
 	derpRegionID uint16
 
+	webrtcConns *xsync.MapOf[key.NodePublic, *webrtc.PeerConnection]
+
 	lastNode atomic.Pointer[tailcfg.Node]
 	// in funnels node updates from other peers to us
 	in chan *tailcfg.Node
 	// out fans out our node updates to peers
-	out chan *tailcfg.Node
+	out chan *overlayMessage
 }
 
 func (r *Receive) IPs() []netip.Addr {
@@ -75,7 +84,16 @@ func (r *Receive) IPs() []netip.Addr {
 	}
 }
 
+var webrtcConfig = webrtc.Configuration{
+	ICEServers: []webrtc.ICEServer{
+		{
+			URLs: []string{"stun:stun.l.google.com:19302"},
+		},
+	},
+}
+
 func (r *Receive) PickDERPHome(ctx context.Context) error {
+
 	nm := netmon.NewStatic()
 	nc := netcheck.Client{
 		NetMon:     nm,
@@ -112,9 +130,14 @@ func (r *Receive) Recv() <-chan *tailcfg.Node {
 	return r.in
 }
 
-func (r *Receive) Send() chan<- *tailcfg.Node {
-	return r.out
+func (r *Receive) SendTailscaleNodeUpdate(node *tailcfg.Node) {
+	r.out <- &overlayMessage{
+		Typ:  messageTypeNodeUpdate,
+		Node: *node.Clone(),
+	}
 }
+
+// gonna have to do something special for per-peer webrtc connections
 
 func (r *Receive) ListenOverlaySTUN(ctx context.Context) (<-chan struct{}, error) {
 	srvAddr, err := net.ResolveUDPAddr("udp4", "stun.l.google.com:19302")
@@ -161,14 +184,13 @@ func (r *Receive) ListenOverlaySTUN(ctx context.Context) (<-chan struct{}, error
 			select {
 			case <-ctx.Done():
 				return
-			case node := <-r.out:
-				r.lastNode.Store(node)
-				raw, err := json.Marshal(overlayMessage{
-					Typ:  messageTypeNodeUpdate,
-					Node: *node,
-				})
+			case msg := <-r.out:
+				if msg.Typ == messageTypeNodeUpdate {
+					r.lastNode.Store(&msg.Node)
+				}
+				raw, err := json.Marshal(msg)
 				if err != nil {
-					panic("marshal node: " + err.Error())
+					panic("marshal overlay msg: " + err.Error())
 				}
 
 				sealed := r.SelfPriv.SealTo(r.PeerPriv.Public(), raw)
@@ -235,7 +257,7 @@ func (r *Receive) ListenOverlaySTUN(ctx context.Context) (<-chan struct{}, error
 				continue
 			}
 
-			res, key, err := r.handleNextMessage(buf, "STUN")
+			res, key, err := r.handleNextMessage(key.NodePublic{}, buf, "STUN")
 			if err != nil {
 				r.HumanLogf("Failed to handle overlay message: %s", err.Error())
 				continue
@@ -274,14 +296,13 @@ func (r *Receive) ListenOverlayDERP(ctx context.Context) error {
 			select {
 			case <-ctx.Done():
 				return
-			case node := <-r.out:
-				r.lastNode.Store(node)
-				raw, err := json.Marshal(overlayMessage{
-					Typ:  messageTypeNodeUpdate,
-					Node: *node,
-				})
+			case msg := <-r.out:
+				if msg.Typ == messageTypeNodeUpdate {
+					r.lastNode.Store(&msg.Node)
+				}
+				raw, err := json.Marshal(msg)
 				if err != nil {
-					panic("marshal node: " + err.Error())
+					panic("marshal overlay msg: " + err.Error())
 				}
 
 				sealed := r.SelfPriv.SealTo(r.PeerPriv.Public(), raw)
@@ -305,7 +326,7 @@ func (r *Receive) ListenOverlayDERP(ctx context.Context) error {
 
 		switch msg := msg.(type) {
 		case derp.ReceivedPacket:
-			res, key, err := r.handleNextMessage(msg.Data, "DERP")
+			res, key, err := r.handleNextMessage(msg.Source, msg.Data, "DERP")
 			if err != nil {
 				r.HumanLogf("Failed to handle overlay message from %s: %s", msg.Source.ShortString(), err.Error())
 				continue
@@ -324,7 +345,7 @@ func (r *Receive) ListenOverlayDERP(ctx context.Context) error {
 	}
 }
 
-func (r *Receive) handleNextMessage(msg []byte, system string) (resRaw []byte, nodeKey key.NodePublic, _ error) {
+func (r *Receive) handleNextMessage(src key.NodePublic, msg []byte, system string) (resRaw []byte, nodeKey key.NodePublic, _ error) {
 	cleartext, ok := r.SelfPriv.OpenFrom(r.PeerPriv.Public(), msg)
 	if !ok {
 		return nil, key.NodePublic{}, errors.New("message failed decryption")
@@ -355,6 +376,11 @@ func (r *Receive) handleNextMessage(msg []byte, system string) (resRaw []byte, n
 		if lastNode := r.lastNode.Load(); lastNode != nil {
 			res.Node = *lastNode
 		}
+
+		if ovMsg.WebrtcDescription != nil {
+			r.setupWebrtcConnection(src, &res, *ovMsg.WebrtcDescription)
+		}
+
 		r.HumanLogf("%s Received connection request over %s from %s", cliui.Timestamp(time.Now()), system, cliui.Keyword(fmt.Sprintf("%s@%s", username, hostname)))
 	case messageTypeNodeUpdate:
 		r.HumanLogf("%s Received updated node from %s", cliui.Timestamp(time.Now()), cliui.Code(ovMsg.Node.Key.String()))
@@ -362,6 +388,18 @@ func (r *Receive) handleNextMessage(msg []byte, system string) (resRaw []byte, n
 		res.Typ = messageTypeNodeUpdate
 		if lastNode := r.lastNode.Load(); lastNode != nil {
 			res.Node = *lastNode
+		}
+
+	case messageTypeWebRTCCandidate:
+		pc, ok := r.webrtcConns.Load(src)
+		if !ok {
+			fmt.Println("got candidate for unknown connection")
+			break
+		}
+
+		err := pc.AddICECandidate(*ovMsg.WebrtcCandidate)
+		if err != nil {
+			fmt.Println("failed to add ice candidate:", err)
 		}
 	}
 
@@ -376,4 +414,129 @@ func (r *Receive) handleNextMessage(msg []byte, system string) (resRaw []byte, n
 
 	sealed := r.SelfPriv.SealTo(r.PeerPriv.Public(), raw)
 	return sealed, ovMsg.Node.Key, nil
+}
+
+func (r *Receive) setupWebrtcConnection(src key.NodePublic, res *overlayMessage, offer webrtc.SessionDescription) {
+	// Configure larger buffer sizes
+	settingEngine := webrtc.SettingEngine{}
+	// Set maximum message size to 16MB
+	settingEngine.SetSCTPMaxReceiveBufferSize(64 * 1024 * 1024)
+
+	api := webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine))
+
+	// Use the custom API to create the peer connection
+	peerConnection, err := api.NewPeerConnection(webrtcConfig)
+	if err != nil {
+		panic(err)
+	}
+
+	peerConnection.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
+		switch s {
+		case webrtc.PeerConnectionStateConnected:
+		case webrtc.PeerConnectionStateDisconnected:
+		case webrtc.PeerConnectionStateFailed:
+		case webrtc.PeerConnectionStateClosed:
+		}
+	})
+
+	peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
+		// Increase buffer sizes
+		d.SetBufferedAmountLowThreshold(65535)
+
+		var (
+			fi     *os.File
+			bar    *progressbar.ProgressBar
+			mw     io.Writer
+			fiSize int
+			read   int
+		)
+
+		d.OnMessage(func(msg webrtc.DataChannelMessage) {
+			if msg.IsString {
+				meta := RtcMetadata{}
+
+				err := json.Unmarshal(msg.Data, &meta)
+				if err != nil {
+					fmt.Println("failed to unmarshal file metadata:")
+					d.Close()
+					return
+				}
+				spew.Dump(meta)
+
+				if meta.Type == RtcMetadataTypeFileMetadata {
+					fiSize = meta.FileMetadata.FileSize
+					fi, err = os.OpenFile(meta.FileMetadata.FileName, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
+					if err != nil {
+						fmt.Println("failed to open file", err)
+					}
+					fmt.Println("opened file", fi.Name())
+					fmt.Println("opened file", fi.Name())
+
+					bar = progressbar.DefaultBytes(
+						int64(fiSize),
+						fmt.Sprintf("Downloading %q", meta.FileMetadata.FileName),
+					)
+					mw = io.MultiWriter(fi, bar)
+				}
+
+			} else {
+				read += len(msg.Data)
+				if fi == nil {
+					fmt.Println("Error: Received binary data before file was opened")
+					d.Close()
+					return
+				}
+
+				_, err := mw.Write(msg.Data)
+				if err != nil {
+					fmt.Printf("Failed to write file data: %v\n", err)
+					d.Close()
+					return
+				}
+
+				if read >= fiSize {
+					bar.Close()
+					fmt.Printf("Successfully wrote file %s (%d bytes)\n", fi.Name(), read)
+					err := fi.Close()
+					if err != nil {
+						fmt.Printf("Error closing file: %v\n", err)
+					}
+					fi = nil
+					bar = nil
+					mw = nil
+				}
+			}
+		})
+	})
+
+	peerConnection.OnICECandidate(func(i *webrtc.ICECandidate) {
+		if i == nil {
+			return
+		}
+		ic := i.ToJSON()
+
+		r.out <- &overlayMessage{
+			Typ:             messageTypeWebRTCCandidate,
+			WebrtcCandidate: &ic,
+		}
+	})
+
+	err = peerConnection.SetRemoteDescription(offer)
+	if err != nil {
+		fmt.Println("failed to set remote description:", err)
+	}
+
+	answer, err := peerConnection.CreateAnswer(nil)
+	if err != nil {
+		fmt.Println("failed to create answer:", err)
+	}
+
+	err = peerConnection.SetLocalDescription(answer)
+	if err != nil {
+		fmt.Println("failed to set local description:", err)
+	}
+
+	res.WebrtcDescription = &answer
+
+	r.webrtcConns.Store(src, peerConnection)
 }

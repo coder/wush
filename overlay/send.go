@@ -1,3 +1,6 @@
+//go:build !js && !wasm
+// +build !js,!wasm
+
 package overlay
 
 import (
@@ -13,6 +16,7 @@ import (
 	"time"
 
 	"github.com/coder/wush/cliui"
+	"github.com/pion/webrtc/v4"
 	"tailscale.com/derp"
 	"tailscale.com/derp/derphttp"
 	"tailscale.com/net/netmon"
@@ -21,12 +25,16 @@ import (
 )
 
 func NewSendOverlay(logger *slog.Logger, dm *tailcfg.DERPMap) *Send {
-	return &Send{
-		derpMap: dm,
-		in:      make(chan *tailcfg.Node, 8),
-		out:     make(chan *tailcfg.Node, 8),
-		SelfIP:  randv6(),
+	s := &Send{
+		derpMap:          dm,
+		in:               make(chan *tailcfg.Node, 8),
+		out:              make(chan *overlayMessage, 8),
+		waitIce:          make(chan struct{}),
+		WaitTransferDone: make(chan struct{}),
+		SelfIP:           randv6(),
 	}
+	s.setupWebrtcConnection()
+	return s
 }
 
 type Send struct {
@@ -38,8 +46,14 @@ type Send struct {
 
 	Auth ClientAuth
 
+	RtcConn          *webrtc.PeerConnection
+	RtcDc            *webrtc.DataChannel
+	offer            webrtc.SessionDescription
+	waitIce          chan struct{}
+	WaitTransferDone chan struct{}
+
 	in  chan *tailcfg.Node
-	out chan *tailcfg.Node
+	out chan *overlayMessage
 }
 
 func (s *Send) IPs() []netip.Addr {
@@ -50,8 +64,11 @@ func (s *Send) Recv() <-chan *tailcfg.Node {
 	return s.in
 }
 
-func (s *Send) Send() chan<- *tailcfg.Node {
-	return s.out
+func (s *Send) SendTailscaleNodeUpdate(node *tailcfg.Node) {
+	s.out <- &overlayMessage{
+		Typ:  messageTypeNodeUpdate,
+		Node: *node.Clone(),
+	}
 }
 
 func (s *Send) ListenOverlaySTUN(ctx context.Context) error {
@@ -83,14 +100,10 @@ func (s *Send) ListenOverlaySTUN(ctx context.Context) error {
 			select {
 			case <-ctx.Done():
 				return
-			case node := <-s.out:
-				msg := overlayMessage{
-					Typ:  messageTypeNodeUpdate,
-					Node: *node,
-				}
+			case msg := <-s.out:
 				raw, err := json.Marshal(msg)
 				if err != nil {
-					panic("marshal node: " + err.Error())
+					panic("marshal overlay msg: " + err.Error())
 				}
 
 				sealed := s.Auth.OverlayPrivateKey.SealTo(s.Auth.ReceiverPublicKey, raw)
@@ -167,14 +180,10 @@ func (s *Send) ListenOverlayDERP(ctx context.Context) error {
 			select {
 			case <-ctx.Done():
 				return
-			case node := <-s.out:
-				msg := overlayMessage{
-					Typ:  messageTypeNodeUpdate,
-					Node: *node,
-				}
+			case msg := <-s.out:
 				raw, err := json.Marshal(msg)
 				if err != nil {
-					panic("marshal node: " + err.Error())
+					panic("marshal overlay msg: " + err.Error())
 				}
 
 				sealed := s.Auth.OverlayPrivateKey.SealTo(s.Auth.ReceiverPublicKey, raw)
@@ -235,6 +244,7 @@ func (s *Send) newHelloPacket() []byte {
 			Username: username,
 			Hostname: hostname,
 		},
+		WebrtcDescription: &s.offer,
 	})
 	if err != nil {
 		panic("marshal node: " + err.Error())
@@ -242,6 +252,21 @@ func (s *Send) newHelloPacket() []byte {
 
 	sealed := s.Auth.OverlayPrivateKey.SealTo(s.Auth.ReceiverPublicKey, raw)
 	return sealed
+}
+
+const (
+	RtcMetadataTypeFileMetadata = "file_metadata"
+	RtcMetadataTypeFileComplete = "file_complete"
+	RtcMetadataTypeFileAck      = "file_ack"
+)
+
+type RtcMetadata struct {
+	Type         string          `json:"type"`
+	FileMetadata RtcFileMetadata `json:"fileMetadata"`
+}
+type RtcFileMetadata struct {
+	FileName string `json:"fileName"`
+	FileSize int    `json:"fileSize"`
 }
 
 func (s *Send) handleNextMessage(msg []byte) (resRaw []byte, _ error) {
@@ -264,8 +289,12 @@ func (s *Send) handleNextMessage(msg []byte) (resRaw []byte, _ error) {
 		// do nothing
 	case messageTypeHelloResponse:
 		s.in <- &ovMsg.Node
+		close(s.waitIce)
+		s.RtcConn.SetRemoteDescription(*ovMsg.WebrtcDescription)
 	case messageTypeNodeUpdate:
 		s.in <- &ovMsg.Node
+	case messageTypeWebRTCCandidate:
+		s.RtcConn.AddICECandidate(*ovMsg.WebrtcCandidate)
 	}
 
 	if res.Typ == 0 {
@@ -279,4 +308,61 @@ func (s *Send) handleNextMessage(msg []byte) (resRaw []byte, _ error) {
 
 	sealed := s.Auth.OverlayPrivateKey.SealTo(s.Auth.ReceiverPublicKey, raw)
 	return sealed, nil
+}
+
+func (s *Send) setupWebrtcConnection() {
+	var err error
+	s.RtcConn, err = webrtc.NewPeerConnection(webrtcConfig)
+	if err != nil {
+		panic("failed to create webrtc connection: " + err.Error())
+	}
+
+	s.RtcConn.OnICECandidate(func(i *webrtc.ICECandidate) {
+		if i == nil {
+			return
+		}
+		ic := i.ToJSON()
+
+		<-s.waitIce
+		s.out <- &overlayMessage{
+			Typ:             messageTypeWebRTCCandidate,
+			WebrtcCandidate: &ic,
+		}
+	})
+
+	s.RtcDc, err = s.RtcConn.CreateDataChannel("fileTransfer", nil)
+	if err != nil {
+		fmt.Println("failed to create dc:", err)
+	}
+
+	// Add message handler to our created data channel
+	s.RtcDc.OnMessage(func(msg webrtc.DataChannelMessage) {
+		if msg.IsString {
+			meta := RtcMetadata{}
+
+			err := json.Unmarshal(msg.Data, &meta)
+			if err != nil {
+				fmt.Println("failed to unmarshal metadata:", err)
+				return
+			}
+
+			if meta.Type == RtcMetadataTypeFileAck {
+				close(s.WaitTransferDone)
+				return
+			}
+			return
+		}
+	})
+
+	answer, err := s.RtcConn.CreateOffer(nil)
+	if err != nil {
+		fmt.Println("failed to create answer:", err)
+	}
+
+	err = s.RtcConn.SetLocalDescription(answer)
+	if err != nil {
+		fmt.Println("failed to set local description:", err)
+	}
+
+	s.offer = answer
 }
