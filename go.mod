@@ -27,7 +27,7 @@ require (
 	github.com/pion/webrtc/v4 v4.0.1
 	github.com/prometheus/client_golang v1.20.4
 	github.com/puzpuzpuz/xsync/v3 v3.4.0
-	github.com/schollz/progressbar/v3 v3.16.1
+	github.com/schollz/progressbar/v3 v3.17.1
 	github.com/spf13/afero v1.11.0
 	github.com/valyala/fasthttp v1.56.0
 	go4.org/mem v0.0.0-20220726221520-4f986261bf13
@@ -35,7 +35,7 @@ require (
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948
 	golang.org/x/net v0.30.0
 	golang.org/x/sys v0.27.0
-	golang.org/x/term v0.25.0
+	golang.org/x/term v0.26.0
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da
 	tailscale.com v1.76.1
 )
