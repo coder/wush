@@ -72,7 +72,6 @@ type Wasm struct {
 	DerpRegionID uint16
 	DerpLatency  time.Duration
 
-	// peers is a map of channels that notify peers of node updates.
 	activePeer atomic.Pointer[chan *overlayMessage]
 	onNewPeer  js.Value
 
@@ -138,7 +137,6 @@ func (r *Wasm) SendTailscaleNodeUpdate(node *tailcfg.Node) {
 }
 
 func (r *Wasm) SendWebrtcCandidate(peer string, cand webrtc.ICECandidateInit) {
-
 	fmt.Println("go: sending webrtc candidate")
 	r.out <- &overlayMessage{
 		Typ:             messageTypeWebRTCCandidate,
@@ -180,6 +178,7 @@ func (r *Wasm) Connect(ctx context.Context, ca ClientAuth, offer webrtc.SessionD
 	go func() {
 		defer r.activePeer.CompareAndSwap(&updates, nil)
 		defer c.Close()
+		defer fmt.Println("closing send goroutine")
 
 		for {
 			select {
@@ -187,7 +186,6 @@ func (r *Wasm) Connect(ctx context.Context, ca ClientAuth, offer webrtc.SessionD
 				return
 			case msg, ok := <-updates:
 				if !ok {
-					c.Close()
 					return
 				}
 
@@ -199,9 +197,10 @@ func (r *Wasm) Connect(ctx context.Context, ca ClientAuth, offer webrtc.SessionD
 				sealed := ca.OverlayPrivateKey.SealTo(ca.ReceiverPublicKey, raw)
 				err = c.Send(ca.ReceiverPublicKey, sealed)
 				if err != nil {
-					fmt.Printf("send response over derp: %s\n", err)
+					fmt.Println("send response over derp:", err)
 					return
 				}
+				fmt.Println("sent message to connected peer")
 			}
 		}
 	}()
@@ -318,10 +317,6 @@ func (r *Wasm) ListenOverlayDERP(ctx context.Context) error {
 					return true
 				})
 				if selectedPeer := r.activePeer.Load(); selectedPeer != nil {
-					// *selectedPeer <- &overlayMessage{
-					// 	Typ:  messageTypeNodeUpdate,
-					// 	Node: *msg.Node.Clone(),
-					// }
 					*selectedPeer <- msg
 					fmt.Println("sending message")
 				}
@@ -332,6 +327,7 @@ func (r *Wasm) ListenOverlayDERP(ctx context.Context) error {
 	for {
 		msg, err := c.Recv()
 		if err != nil {
+			fmt.Println("Recv derp:", err)
 			return err
 		}
 

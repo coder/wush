@@ -117,9 +117,10 @@ func getWebRTCConfig() webrtc.Configuration {
 	}
 	for i, server := range iceConfig.IceServers {
 		config.ICEServers[i] = webrtc.ICEServer{
-			URLs:       server.URLs,
-			Username:   server.Username,
-			Credential: server.Credential,
+			URLs:           server.URLs,
+			Username:       server.Username,
+			Credential:     server.Credential,
+			CredentialType: webrtc.ICECredentialTypePassword,
 		}
 	}
 

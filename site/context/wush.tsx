@@ -9,12 +9,13 @@ const iceServers = [
   {
     urls: "stun:stun.l.google.com:19302",
   },
-  ...(process.env.PUBLIC_TURN_SERVER_URL
+  ...(process.env.NEXT_PUBLIC_TURN_SERVER_URL
     ? [
         {
-          urls: process.env.PUBLIC_TURN_SERVER_URL,
-          username: process.env.PUBLIC_TURN_USERNAME ?? "",
-          credential: process.env.PUBLIC_TURN_CREDENTIAL ?? "",
+          urls: process.env.NEXT_PUBLIC_TURN_SERVER_URL,
+          username: process.env.NEXT_PUBLIC_TURN_USERNAME ?? "",
+          credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL ?? "",
+          credentialType: "password",
         },
       ]
     : []),
@@ -149,8 +150,6 @@ export const WasmProvider: React.FC<WasmProviderProps> = ({ children }) => {
       id: string,
       offer: RTCSessionDescriptionInit
     ): Promise<RTCSessionDescription | null> => {
-      console.log("got webrtc offer", id, JSON.stringify(offer));
-
       const rtc = wasm.rtc.current.get(id);
       if (!rtc) {
         console.log(
@@ -168,7 +167,6 @@ export const WasmProvider: React.FC<WasmProviderProps> = ({ children }) => {
         console.error(`failed to create answer: ${ex}`);
       }
 
-      console.log("desc", JSON.stringify(rtc.localDescription));
       return rtc.localDescription;
     },
     onWebrtcAnswer: async (
@@ -305,16 +303,16 @@ export const WasmProvider: React.FC<WasmProviderProps> = ({ children }) => {
           throw new Error("failed to parse peer id");
         }
 
+        // Initialize an array to buffer candidates
+        const bufferedCandidates: RTCIceCandidate[] = [];
+
         // Set up 'onicecandidate' handler before starting ICE gathering
         newPeerConnection.onicecandidate = (
           event: RTCPeerConnectionIceEvent
         ) => {
           if (event.candidate) {
-            console.log("onicecandidate", event.candidate);
-            wasm.wush.current?.sendWebrtcCandidate(
-              peerInfo.id,
-              event.candidate
-            );
+            console.log("Buffering ICE candidate", event.candidate);
+            bufferedCandidates.push(event.candidate);
           }
         };
 
@@ -339,6 +337,25 @@ export const WasmProvider: React.FC<WasmProviderProps> = ({ children }) => {
         if (!peer) {
           throw new Error("Failed to connect to peer: peer is null");
         }
+
+        newPeerConnection.onicecandidate = (
+          event: RTCPeerConnectionIceEvent
+        ) => {
+          if (event.candidate) {
+            console.log("onicecandidate", event.candidate);
+            wasm.wush.current?.sendWebrtcCandidate(
+              peerInfo.id,
+              event.candidate
+            );
+          }
+        };
+
+        // Add a method to send buffered candidates
+        for (const candidate of bufferedCandidates) {
+          wasm.wush.current?.sendWebrtcCandidate(peerInfo.id, candidate);
+        }
+        // Clear the buffer after sending
+        bufferedCandidates.length = 0;
 
         setWasm((prevState) => {
           return {

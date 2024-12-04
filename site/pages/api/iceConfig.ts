@@ -26,14 +26,14 @@ export default function handler(
 
 	// Add TURN server if credentials are configured
 	if (
-		process.env.PUBLIC_TURN_SERVER_URL &&
-		process.env.PUBLIC_TURN_USERNAME &&
-		process.env.PUBLIC_TURN_CREDENTIAL
+		process.env.NEXT_PUBLIC_TURN_SERVER_URL &&
+		process.env.NEXT_PUBLIC_TURN_USERNAME &&
+		process.env.NEXT_PUBLIC_TURN_CREDENTIAL
 	) {
 		iceServers.push({
-			urls: [process.env.PUBLIC_TURN_SERVER_URL],
-			username: process.env.PUBLIC_TURN_USERNAME,
-			credential: process.env.PUBLIC_TURN_CREDENTIAL,
+			urls: [process.env.NEXT_PUBLIC_TURN_SERVER_URL],
+			username: process.env.NEXT_PUBLIC_TURN_USERNAME,
+			credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
 		});
 	}
 
