@@ -1,4 +1,5 @@
-import "../public/wasm_exec.js";
+import "../wasm/wasm_exec.js";
+import wasmModule from "../wasm/main.wasm";
 
 import type React from "react";
 import type { ReactNode } from "react";
@@ -89,6 +90,7 @@ export const WasmProvider: React.FC<WasmProviderProps> = ({ children }) => {
 
   const config: WushConfig = {
     onNewPeer: (peer: Peer) => {
+      console.log(JSON.stringify(iceServers));
       const newPeerConnection = new RTCPeerConnection({
         iceServers,
       });
@@ -218,44 +220,48 @@ export const WasmProvider: React.FC<WasmProviderProps> = ({ children }) => {
     async function loadWasm() {
       const go = new Go();
 
-      const module = await WebAssembly.instantiateStreaming(
-        fetch("/main.wasm"),
-        go.importObject
-      );
+      try {
+        const response = await fetch(wasmModule as unknown as string);
+        const buffer = await response.arrayBuffer();
+        const module = await WebAssembly.instantiate(buffer, go.importObject);
 
-      go.run(module.instance).then(() => {
-        setWasm((prevState) => {
-          return {
+        go.run(module.instance).then(() => {
+          setWasm((prevState) => ({
             ...prevState,
             loading: false,
             peers: [],
             error: "WASM exited",
-          };
+          }));
         });
-      });
 
-      newWush(config)
-        .then((wush) => {
-          setWasm((prevState) => {
-            prevState.wush.current = wush;
-
-            return {
-              ...prevState,
-              loading: false,
-            };
+        newWush(config)
+          .then((wush) => {
+            setWasm((prevState) => {
+              prevState.wush.current = wush;
+              return {
+                ...prevState,
+                loading: false,
+              };
+            });
+          })
+          .catch((ex) => {
+            setWasm((prevState) => {
+              prevState.wush.current = null;
+              return {
+                ...prevState,
+                loading: false,
+                peers: [],
+                error: `Wush failed to initialize: ${ex}`,
+              };
+            });
           });
-        })
-        .catch((ex) => {
-          setWasm((prevState) => {
-            prevState.wush.current = null;
-            return {
-              ...prevState,
-              loading: false,
-              peers: [],
-              error: `Wush failed to initialize: ${ex}`,
-            };
-          });
-        });
+      } catch (error) {
+        setWasm((prevState) => ({
+          ...prevState,
+          loading: false,
+          error: `Failed to load WASM: ${error}`,
+        }));
+      }
     }
 
     loadWasm();

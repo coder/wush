@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"net/netip"
 	"os"
 	"sync"
@@ -83,12 +84,46 @@ func (r *Receive) IPs() []netip.Addr {
 	}
 }
 
-var webrtcConfig = webrtc.Configuration{
-	ICEServers: []webrtc.ICEServer{
-		{
-			URLs: []string{"stun:stun.l.google.com:19302"},
+func getWebRTCConfig() webrtc.Configuration {
+	defaultConfig := webrtc.Configuration{
+		ICEServers: []webrtc.ICEServer{
+			{
+				URLs: []string{"stun:stun.l.google.com:19302"},
+			},
 		},
-	},
+	}
+
+	resp, err := http.Get("https://wush.dev/api/iceConfig")
+	if err != nil {
+		fmt.Println("failed to get ice config:", err)
+		return defaultConfig
+	}
+	defer resp.Body.Close()
+
+	var iceConfig struct {
+		IceServers []struct {
+			URLs       []string `json:"urls"`
+			Username   string   `json:"username"`
+			Credential string   `json:"credential"`
+		} `json:"iceServers"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&iceConfig); err != nil {
+		return defaultConfig
+	}
+
+	config := webrtc.Configuration{
+		ICEServers: make([]webrtc.ICEServer, len(iceConfig.IceServers)),
+	}
+	for i, server := range iceConfig.IceServers {
+		config.ICEServers[i] = webrtc.ICEServer{
+			URLs:       server.URLs,
+			Username:   server.Username,
+			Credential: server.Credential,
+		}
+	}
+
+	return config
 }
 
 func (r *Receive) PickDERPHome(ctx context.Context) error {
@@ -424,7 +459,7 @@ func (r *Receive) setupWebrtcConnection(src key.NodePublic, res *overlayMessage,
 	api := webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine))
 
 	// Use the custom API to create the peer connection
-	peerConnection, err := api.NewPeerConnection(webrtcConfig)
+	peerConnection, err := api.NewPeerConnection(getWebRTCConfig())
 	if err != nil {
 		panic(err)
 	}

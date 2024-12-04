@@ -5,7 +5,9 @@ main.wasm
 test.txt
 .next/
 .env
-site/public/*.js
-site/public/*.wasm
+site/wasm/*.js
+site/wasm/*.wasm
 site/node_modules/
 .env.local
+
+.vercel

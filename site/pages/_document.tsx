@@ -13,7 +13,7 @@ class MyDocument extends Document {
             rel="stylesheet"
             href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
           />
-          <link rel="manifest" href="/app.webmanifest" />
+          <link rel="manifest" href="/site.webmanifest" />
         </Head>
         <body className="bg-bg text-fg">
           <Main />

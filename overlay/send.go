@@ -312,7 +312,7 @@ func (s *Send) handleNextMessage(msg []byte) (resRaw []byte, _ error) {
 
 func (s *Send) setupWebrtcConnection() {
 	var err error
-	s.RtcConn, err = webrtc.NewPeerConnection(webrtcConfig)
+	s.RtcConn, err = webrtc.NewPeerConnection(getWebRTCConfig())
 	if err != nil {
 		panic("failed to create webrtc connection: " + err.Error())
 	}

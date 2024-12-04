@@ -23,8 +23,6 @@ require (
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mitchellh/go-wordwrap v1.0.1
 	github.com/muesli/termenv v0.15.3-0.20240618155329-98d742f6907a
-	github.com/pion/datachannel v1.5.9
-	github.com/pion/logging v0.2.2
 	github.com/pion/stun/v3 v3.0.0
 	github.com/pion/webrtc/v4 v4.0.1
 	github.com/prometheus/client_golang v1.20.4
@@ -32,7 +30,6 @@ require (
 	github.com/schollz/progressbar/v3 v3.16.1
 	github.com/spf13/afero v1.11.0
 	github.com/valyala/fasthttp v1.56.0
-	go.uber.org/atomic v1.11.0
 	go4.org/mem v0.0.0-20220726221520-4f986261bf13
 	golang.org/x/crypto v0.28.0
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948
@@ -161,9 +158,11 @@ require (
 	github.com/outcaste-io/ristretto v0.2.3 // indirect
 	github.com/philhofer/fwd v1.1.2 // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
+	github.com/pion/datachannel v1.5.9 // indirect
 	github.com/pion/dtls/v3 v3.0.3 // indirect
 	github.com/pion/ice/v4 v4.0.2 // indirect
 	github.com/pion/interceptor v0.1.37 // indirect
+	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/mdns/v2 v2.0.7 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pion/rtcp v1.2.14 // indirect
@@ -218,6 +217,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.30.0 // indirect
 	go.opentelemetry.io/otel/trace v1.32.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
+	go.uber.org/atomic v1.11.0 // indirect
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba // indirect
 	golang.org/x/mod v0.21.0 // indirect
 	golang.org/x/oauth2 v0.23.0 // indirect

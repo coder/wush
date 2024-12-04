@@ -10,6 +10,26 @@ const createConfig = async (): Promise<NextConfig> => {
 		env: {
 			GITHUB_STARS: githubStars,
 		},
+		webpack: (config, { dev }) => {
+			// Add WASM support
+			config.experiments = {
+				...config.experiments,
+				asyncWebAssembly: true,
+			};
+
+			// Add rule for wasm files with content hashing
+			config.module.rules.push({
+				test: /\.wasm$/,
+				type: "asset/resource",
+				generator: {
+					filename: dev
+						? "static/wasm/[name].wasm"
+						: "static/wasm/[name].[hash][ext]",
+				},
+			});
+
+			return config;
+		},
 	};
 };
 

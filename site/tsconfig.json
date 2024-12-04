@@ -1,8 +1,9 @@
 {
   "include": [
+    "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts"
+    "types/**/*.d.ts"
   ],
   "compilerOptions": {
     "lib": [
@@ -11,8 +12,7 @@
       "ES2022"
     ],
     "types": [
-      "@types/golang-wasm-exec",
-      "./types/wush_js.d.ts"
+      "golang-wasm-exec"
     ],
     "isolatedModules": true,
     "esModuleInterop": true,
@@ -35,7 +35,8 @@
       {
         "name": "next"
       }
-    ]
+    ],
+    "typeRoots": ["./types", "./node_modules/@types"]
   },
   "exclude": [
     "node_modules"
