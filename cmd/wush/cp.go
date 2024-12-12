@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,7 +60,13 @@ func initAuth(authFlag *string, ca *overlay.ClientAuth) serpent.MiddlewareFunc {
 				}
 			}
 
-			err := ca.Parse(strings.TrimSpace(*authFlag))
+			// If the user provided a URL, extract the auth key from the fragment.
+			authKey := *authFlag
+			if u, err := url.Parse(*authFlag); err == nil && u.Fragment != "" {
+				authKey = u.Fragment
+			}
+
+			err := ca.Parse(strings.TrimSpace(authKey))
 			if err != nil {
 				return fmt.Errorf("parse auth key: %w", err)
 			}

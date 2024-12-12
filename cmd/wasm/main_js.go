@@ -72,9 +72,32 @@ func newWush(cfg js.Value) map[string]any {
 		cfg.Get("onWebrtcCandidate"),
 	)
 
-	err = ov.PickDERPHome(ctx)
-	if err != nil {
-		panic(err)
+	// Try to get stored DERP home from localStorage
+	localStorage := js.Global().Get("localStorage")
+	storedDerpHome := localStorage.Call("getItem", "derpHome")
+	if !storedDerpHome.IsNull() {
+		// Parse stored DERP home and use it
+		derpID := uint16(js.Global().Get("parseInt").Invoke(storedDerpHome).Int())
+		if region := dm.Regions[int(derpID)]; region != nil {
+			ov.DerpRegionID = derpID
+			hlog("Using stored DERP home: %s", region.RegionName)
+		} else {
+			// If stored DERP home is invalid, pick a new one
+			err = ov.PickDERPHome(ctx)
+			if err != nil {
+				panic(err)
+			}
+			// Store the newly picked DERP home
+			localStorage.Call("setItem", "derpHome", fmt.Sprint(ov.DerpRegionID))
+		}
+	} else {
+		// No stored DERP home, pick a new one
+		err = ov.PickDERPHome(ctx)
+		if err != nil {
+			panic(err)
+		}
+		// Store the picked DERP home
+		localStorage.Call("setItem", "derpHome", fmt.Sprint(ov.DerpRegionID))
 	}
 
 	s, err := tsserver.NewServer(ctx, logger, ov, dm)
@@ -91,11 +114,13 @@ func newWush(cfg js.Value) map[string]any {
 		panic(err)
 	}
 
-	_, err = ts.Up(ctx)
-	if err != nil {
-		panic(err)
-	}
-	hlog("WireGuard is ready")
+	go func() {
+		_, err = ts.Up(ctx)
+		if err != nil {
+			panic(err)
+		}
+		hlog("WireGuard is ready")
+	}()
 
 	cpListener, err := ts.Listen("tcp", ":4444")
 	if err != nil {

@@ -30,6 +30,17 @@ const createConfig = async (): Promise<NextConfig> => {
 
 			return config;
 		},
+		headers: async () => [
+			{
+				source: "/:all*.wasm",
+				headers: [
+					{
+						key: "Cache-Control",
+						value: "public, max-age=31536000, immutable",
+					},
+				],
+			},
+		],
 	};
 };
 

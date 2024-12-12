@@ -86,6 +86,8 @@ func serveCmd() *serpent.Command {
 				hlog("Your auth key is:")
 				fmt.Println("\t>", cliui.Code(r.ClientAuth().AuthKey()))
 				hlog("Use this key to authenticate other " + cliui.Code("wush") + " commands to this instance.")
+				hlog("Visit the following link to connect via the browser:")
+				fmt.Println("\t>", cliui.Code("https://wush.dev#"+r.ClientAuth().AuthKey()))
 			} else {
 				fmt.Println(cliui.Code(r.ClientAuth().AuthKey()))
 				hlog("The auth key has been printed to stdout")

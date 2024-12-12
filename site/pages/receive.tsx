@@ -8,7 +8,7 @@ export default function Component() {
 
   const handleCopyAuthKey = () => {
     navigator.clipboard.writeText(
-      wasm.wush.current?.auth_info().auth_key || ""
+      `https://wush.dev#${wasm.wush.current?.auth_info().auth_key || ""}`
     );
     toast.info("Successfully copied auth key", {
       duration: 1500,
@@ -18,8 +18,21 @@ export default function Component() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-300">
-        Share this authentication key to receive a file.
+        Share this authentication key to receive a file. Use{" "}
+        <a href="https://github.com/coder/wush">
+          <code className="bg-gray-900 px-1.5 py-0.5 rounded text-sm">
+            wush cp {"<file name>"}
+          </code>
+        </a>{" "}
+        or{" "}
+        <a href="https://wush.dev/send">
+          <code className="bg-gray-900 px-1.5 py-0.5 rounded text-sm">
+            https://wush.dev/send
+          </code>
+        </a>{" "}
+        to send a file to this machine.
       </p>
+
       <div className="flex">
         <input
           type="text"

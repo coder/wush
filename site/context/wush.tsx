@@ -24,6 +24,7 @@ const iceServers = [
 interface WasmContextProps {
   wush: React.MutableRefObject<Wush | null>;
   loading: boolean;
+  connecting: boolean;
   error?: string;
 
   connectedPeer?: Peer;
@@ -33,6 +34,8 @@ interface WasmContextProps {
   dataChannel: React.MutableRefObject<Map<string, RTCDataChannel | null>>;
 
   incomingFiles: IncomingFile[];
+  activeTransfers: FileTransferState[];
+  setActiveTransfers: React.Dispatch<React.SetStateAction<FileTransferState[]>>;
 }
 
 type IncomingFile = {
@@ -49,11 +52,14 @@ type IncomingFile = {
 // Define the context type as WasmModule or null initially
 const WasmContext = createContext<WasmContextProps>({
   loading: true,
+  connecting: false,
   peers: [],
   wush: { current: null },
   rtc: { current: new Map() },
   dataChannel: { current: new Map() },
   incomingFiles: [],
+  activeTransfers: [],
+  setActiveTransfers: () => {},
 });
 
 interface WasmProviderProps {
@@ -62,13 +68,19 @@ interface WasmProviderProps {
 
 export const WasmProvider: React.FC<WasmProviderProps> = ({ children }) => {
   const [initOnce, setInitOnce] = useState<boolean>(false);
+  const [activeTransfers, setActiveTransfers] = useState<FileTransferState[]>(
+    []
+  );
   const [wasm, setWasm] = useState<WasmContextProps>({
     loading: true,
+    connecting: false,
     peers: [],
     wush: useRef(null),
     rtc: useRef(new Map()),
     dataChannel: useRef(new Map()),
     incomingFiles: [],
+    activeTransfers,
+    setActiveTransfers,
   });
   const [currentConnectedPeer, setCurrentConnectedPeer] = useState<string>("");
 
@@ -91,7 +103,6 @@ export const WasmProvider: React.FC<WasmProviderProps> = ({ children }) => {
 
   const config: WushConfig = {
     onNewPeer: (peer: Peer) => {
-      console.log(JSON.stringify(iceServers));
       const newPeerConnection = new RTCPeerConnection({
         iceServers,
       });
@@ -294,8 +305,7 @@ export const WasmProvider: React.FC<WasmProviderProps> = ({ children }) => {
           iceServers: iceServers,
         });
 
-        const newDataChannel =
-          newPeerConnection.createDataChannel("fileTransfer");
+        const newDataChannel = newPeerConnection.createDataChannel("control");
         setupDataChannel(newDataChannel, setWasm);
 
         const peerInfo = wasm.wush.current?.parseAuthKey(currentFragment);
@@ -321,7 +331,7 @@ export const WasmProvider: React.FC<WasmProviderProps> = ({ children }) => {
 
         setWasm((prevState) => {
           prevState.rtc.current.set(peerInfo.id, newPeerConnection);
-          prevState.dataChannel.current.set(peerInfo.id, newDataChannel);
+          // prevState.dataChannel.current.set(peerInfo.id, newDataChannel);
 
           console.log(
             "connect peer called, setting wasm",
@@ -360,6 +370,7 @@ export const WasmProvider: React.FC<WasmProviderProps> = ({ children }) => {
         setWasm((prevState) => {
           return {
             ...prevState,
+            connecting: false,
             connectedPeer: peer,
           };
         });
@@ -368,10 +379,21 @@ export const WasmProvider: React.FC<WasmProviderProps> = ({ children }) => {
       }
     }
 
+    updateField("connecting", true);
     connectPeer();
   }, [wasm, currentFragment, updateField, currentConnectedPeer]);
 
-  return <WasmContext.Provider value={wasm}>{children}</WasmContext.Provider>;
+  return (
+    <WasmContext.Provider
+      value={{
+        ...wasm,
+        activeTransfers,
+        setActiveTransfers,
+      }}
+    >
+      {children}
+    </WasmContext.Provider>
+  );
 };
 
 // Custom hook to use the WASM module in components
@@ -441,11 +463,11 @@ const setupDataChannel = (
           ],
         }));
       } else if (message.type === "file_complete") {
+        console.log("File transfer complete, creating blob...");
         const receivedFile = new Blob(receivedBuffers);
-        triggerFileDownload(receivedFile, receivedFileName);
-        receivedBuffers = [];
+        console.log("Blob created, size:", receivedFile.size);
 
-        // Update progress to 100% but don't remove
+        // Update progress to 100%
         setWasm((prev) => ({
           ...prev,
           incomingFiles: prev.incomingFiles.map((file) =>
@@ -453,17 +475,24 @@ const setupDataChannel = (
           ),
         }));
 
-        console.log("sending file ack...");
-        const ackMessage: RtcMetadata = {
-          type: "file_ack",
-          fileMetadata: { fileName: "", fileSize: 0 },
-        };
-        try {
-          dataChannel.send(JSON.stringify(ackMessage));
-          console.log("file ack sent successfully");
-        } catch (err) {
-          console.error("Error sending ack:", err);
-        }
+        // Trigger download with a small delay to ensure UI updates first
+        setTimeout(() => {
+          console.log("Triggering download for:", receivedFileName);
+          triggerFileDownload(receivedFile, receivedFileName);
+          receivedBuffers = [];
+
+          console.log("Sending file ack...");
+          const ackMessage: RtcMetadata = {
+            type: "file_ack",
+            fileMetadata: { fileName: "", fileSize: 0 },
+          };
+          try {
+            dataChannel.send(JSON.stringify(ackMessage));
+            console.log("File ack sent successfully");
+          } catch (err) {
+            console.error("Error sending ack:", err);
+          }
+        }, 100);
       }
     } else if (event.data instanceof ArrayBuffer) {
       receivedBuffers.push(event.data);
@@ -501,17 +530,55 @@ export type RtcMetadata = {
 };
 
 const triggerFileDownload = (blob: Blob, fileName: string) => {
-  const url = URL.createObjectURL(blob);
+  try {
+    // Create the URL
+    const url = URL.createObjectURL(blob);
 
-  // Create a temporary anchor element and trigger the download
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.style.display = "none";
-  a.click();
-  a.remove();
+    // Create download link
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
 
-  // Release the object URL after a short delay
-  setTimeout(() => URL.revokeObjectURL(url), 100);
+    // Required for Firefox
+    a.style.display = "none";
+    document.body.appendChild(a);
+
+    // Trigger download using click()
+    a.click();
+
+    // Clean up
+    requestAnimationFrame(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+  } catch (err) {
+    console.error("Download failed:", err);
+
+    // Fallback method
+    try {
+      const newWindow = window.open("", "_blank");
+      if (newWindow) {
+        const url = URL.createObjectURL(blob);
+        newWindow.location.href = url;
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch (fallbackErr) {
+      console.error("Fallback download failed:", fallbackErr);
+    }
+  }
+};
+
+// Add FileTransferState type
+export type FileTransferState = {
+  id: string;
+  file: File;
+  progress: number;
+  bytesPerSecond: number;
+  eta: string;
+  dc: RTCDataChannel;
+  completed: boolean;
+  finalStats?: {
+    duration: number;
+    averageSpeed: number;
+  };
 };
