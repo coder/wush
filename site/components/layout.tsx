@@ -125,7 +125,20 @@ export default function Layout({ children }: { children: ReactNode }) {
                   type="text"
                   value={pendingPeer}
                   className="flex-grow p-3 border border-gray-600 rounded bg-gray-700 text-gray-200"
-                  onChange={(e) => setPendingPeer(e.target.value)}
+                  onChange={(e) => {
+                    // If pasting a URL, extract the fragment
+                    if (e.target.value.includes("#")) {
+                      try {
+                        const url = new URL(e.target.value);
+                        setPendingPeer(url.hash.slice(1));
+                      } catch {
+                        // If URL parsing fails, just use the value as-is
+                        setPendingPeer(e.target.value);
+                      }
+                    } else {
+                      setPendingPeer(e.target.value);
+                    }
+                  }}
                   readOnly={Boolean(wasm.connectedPeer)}
                   placeholder="Enter auth key"
                 />

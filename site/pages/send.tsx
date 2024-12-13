@@ -243,6 +243,16 @@ const FileTransfer: React.FC = () => {
           offset += chunk.byteLength;
 
           if (offset >= file.size) {
+            // Send file complete message before closing the channel
+            const completeMessage: RtcMetadata = {
+              type: "file_complete",
+              fileMetadata: {
+                fileName: file.name,
+                fileSize: file.size,
+              },
+            };
+            dc.send(JSON.stringify(completeMessage));
+
             cleanupStatsInterval();
             const endTime = performance.now();
             const totalSeconds = (endTime - startTime) / 1000;
