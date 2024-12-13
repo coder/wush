@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { Star, Copy, Plug, Plug2, PlugZap, Download } from "lucide-react";
+import { Star, Plug, PlugZap, Download } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useWasm } from "@/context/wush";
