@@ -16,7 +16,7 @@ shells over a peer-to-peer WireGuard connection. It's similar to
 On the host machine:
 
 ```bash
-$ wush host
+$ wush serve
 Picked DERP region Toronto as overlay home
 Your auth key is:
     >  112v1RyL5KPzsbMbhT7fkEGrcfpygxtnvwjR5kMLGxDHGeLTK1BvoPqsUcjo7xyMkFn46KLTdedKuPCG5trP84mz9kx
