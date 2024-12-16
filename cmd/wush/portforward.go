@@ -67,7 +67,7 @@ func portForwardCmd() *serpent.Command {
 		Middleware: serpent.Chain(
 			initLogger(&verbose, ptr.To(false), logger, &logf),
 			initAuth(&overlayOpts.authKey, &overlayOpts.clientAuth),
-			derpMap(nil, dm),
+			derpMap(&derpmapFi, dm),
 			sendOverlayMW(overlayOpts, &send, logger, dm, &logf),
 		),
 		Handler: func(inv *serpent.Invocation) error {
