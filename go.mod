@@ -29,11 +29,11 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.4.0
 	github.com/schollz/progressbar/v3 v3.16.1
 	github.com/spf13/afero v1.11.0
-	github.com/valyala/fasthttp v1.56.0
+	github.com/valyala/fasthttp v1.58.0
 	go4.org/mem v0.0.0-20220726221520-4f986261bf13
 	golang.org/x/crypto v0.31.0
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948
-	golang.org/x/net v0.30.0
+	golang.org/x/net v0.31.0
 	golang.org/x/sys v0.28.0
 	golang.org/x/term v0.27.0
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da
