@@ -50,7 +50,7 @@ var (
 func Color(s string) termenv.Color {
 	colorOnce.Do(func() {
 		color = termenv.NewOutput(os.Stdout).ColorProfile()
-		if flag.Lookup("test.v") != nil {
+		if _, exists := os.LookupEnv("NO_COLOR"); exists || flag.Lookup("test.v") != nil {
 			// Use a consistent colorless profile in tests so that results
 			// are deterministic.
 			color = termenv.Ascii
