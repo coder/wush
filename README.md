@@ -50,7 +50,7 @@ coder@colin:~$
 Using install script
 
 ```bash
-curl -fsSL https://wush.dev/install.sh | sh
+curl -fsSL https://github.com/coder/wush/raw/refs/heads/main/install.sh | sh
 ```
 
 Using Homebrew
